@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>集計ダッシュボード - ロータリー出欠管理</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;900&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Noto Sans JP', -apple-system, sans-serif;
+  background: #f4f6fb;
+  color: #1e293b;
+  min-height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(6, 182, 212, 0.04) 0%, transparent 50%);
+  z-index: 0;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.header h1 {
+  font-size: 20px;
+  font-weight: 900;
+  flex: 1;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header-stats { display: flex; gap: 16px; }
+.stat-box {
+  background: white;
+  border: 1px solid #e2e8f0;
+  padding: 8px 24px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.04);
+}
+.stat-num {
+  font-size: 28px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.stat-label { font-size: 11px; color: #94a3b8; letter-spacing: 2px; font-weight: 600; }
+
+.toolbar {
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.6);
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.toolbar button, .toolbar a {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.toolbar button:hover, .toolbar a:hover { background: #f1f5f9; }
+.toolbar .btn-export { border-color: #bbf7d0; color: #16a34a; background: #f0fdf4; }
+.toolbar .btn-export:hover { background: #dcfce7; }
+.toolbar .btn-reset { border-color: #fecaca; color: #dc2626; background: #fef2f2; }
+.toolbar .btn-reset:hover { background: #fee2e2; }
+.toolbar .spacer { flex: 1; }
+.live-badge {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: blink 1.5s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.main { position: relative; z-index: 1; padding: 24px 32px; }
+
+.group-section { margin-bottom: 28px; }
+.group-title {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
+  background: white;
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.04);
+  color: #4338ca;
+}
+.group-title .group-stats {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+details { margin-bottom: 6px; }
+summary {
+  cursor: pointer;
+  padding: 10px 16px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.15s;
+  list-style: none;
+  color: #334155;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: '▸';
+  font-size: 12px;
+  color: #94a3b8;
+  transition: transform 0.2s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+summary:hover { background: #f8fafc; border-color: #c7d2fe; }
+
+.progress-bar {
+  width: 140px;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.progress-text {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.club-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.club-table th {
+  background: #f8fafc;
+  padding: 8px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 1px;
+  border-bottom: 2px solid #e2e8f0;
+}
+.club-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: #334155;
+}
+.club-table tr:hover td { background: #f8fafc; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.badge-attended {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+}
+.badge-absent {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+/* Import modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: white;
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.12);
+}
+.modal h2 {
+  margin-bottom: 16px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.modal p { margin-bottom: 12px; color: #64748b; font-size: 13px; line-height: 1.6; }
+.modal code {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #6366f1;
+}
+.modal .warn { color: #dc2626; font-weight: 600; font-size: 13px; }
+.modal input[type="file"] { margin: 12px 0; color: #64748b; }
+.modal .btn-row { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
+.modal button {
+  padding: 10px 24px;
+  border-radius: 10px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modal .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+.modal .btn-secondary { background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.12); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ROTARY DASHBOARD</h1>
+  <div class="header-stats">
+    <div class="stat-box">
+      <div class="stat-num" id="stat-attended">0</div>
+      <div class="stat-label">出席</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" id="stat-total">0</div>
+      <div class="stat-label">全体</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" id="stat-rate">0%</div>
+      <div class="stat-label">出席率</div>
+    </div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+  <div class="spacer"></div>
+  <button onclick="showImportModal()">CSV インポート</button>
+  <a href="/api/export" class="btn-export">CSV エクスポート</a>
+  <button class="btn-reset" onclick="resetAll()">出欠リセット</button>
+</div>
+
+<div class="main" id="main"></div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <h2>CSV名簿インポート</h2>
+    <p>
+      CSVフォーマット（ヘッダー行あり）：<br>
+      <code>グループ番号,グループ名,クラブ名,名前</code><br><br>
+      例：<code>1,第1グループ,中央RC,田中 太郎</code>
+    </p>
+    <p class="warn">※ 既存データはすべて上書きされます</p>
+    <input type="file" id="csv-file" accept=".csv">
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="hideImportModal()">キャンセル</button>
+      <button class="btn-primary" onclick="doImport()">インポート</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadDashboard() {
+  const res = await fetch('/api/dashboard');
+  const data = await res.json();
+
+  document.getElementById('stat-attended').textContent = data.totalAttended;
+  document.getElementById('stat-total').textContent = data.totalMembers;
+  document.getElementById('stat-rate').textContent =
+    data.totalMembers > 0 ? Math.round(data.totalAttended / data.totalMembers * 100) + '%' : '0%';
+
+  const grouped = {};
+  for (const c of data.clubs) {
+    if (!grouped[c.group_id]) grouped[c.group_id] = { name: c.group_name, clubs: [] };
+    grouped[c.group_id].clubs.push(c);
+  }
+
+  const membersByClub = {};
+  for (const m of data.members) {
+    if (!membersByClub[m.club_name]) membersByClub[m.club_name] = [];
+    membersByClub[m.club_name].push(m);
+  }
+
+  let html = '';
+  for (const [gid, group] of Object.entries(grouped)) {
+    const gTotal = group.clubs.reduce((s, c) => s + c.total, 0);
+    const gAttended = group.clubs.reduce((s, c) => s + c.attended, 0);
+
+    html += `<div class="group-section">`;
+    html += `<div class="group-title">${esc(group.name)}
+      <span class="group-stats">${gAttended} / ${gTotal} (${gTotal > 0 ? Math.round(gAttended/gTotal*100) : 0}%)</span>
+    </div>`;
+
+    for (const club of group.clubs) {
+      const pct = club.total > 0 ? Math.round(club.attended / club.total * 100) : 0;
+      const clubMembers = membersByClub[club.club_name] || [];
+
+      html += `<details>`;
+      html += `<summary>
+        ${esc(club.club_name)}
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <span class="progress-text">${club.attended}/${club.total} (${pct}%)</span>
+      </summary>`;
+
+      html += `<table class="club-table"><thead><tr><th>名前</th><th>状態</th><th>出席時刻</th></tr></thead><tbody>`;
+      for (const m of clubMembers) {
+        if (m.club_name !== club.club_name) continue;
+        html += `<tr>
+          <td>${esc(m.name)}</td>
+          <td>${m.attended ? '<span class="badge badge-attended">出席</span>' : '<span class="badge badge-absent">未出席</span>'}</td>
+          <td style="color:#94a3b8;">${m.attended_at || '-'}</td>
+        </tr>`;
+      }
+      html += `</tbody></table></details>`;
+    }
+    html += `</div>`;
+  }
+
+  document.getElementById('main').innerHTML = html;
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function showImportModal() { document.getElementById('import-modal').classList.add('active'); }
+function hideImportModal() { document.getElementById('import-modal').classList.remove('active'); }
+
+async function doImport() {
+  const file = document.getElementById('csv-file').files[0];
+  if (!file) { alert('ファイルを選択してください'); return; }
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/import', { method: 'POST', body: form });
+  const data = await res.json();
+  if (data.ok) {
+    alert('インポート完了');
+    hideImportModal();
+    loadDashboard();
+  } else {
+    alert('エラー: ' + data.error);
+  }
+}
+
+async function resetAll() {
+  if (!confirm('全員の出欠をリセットしますか？\nこの操作は取り消せません。')) return;
+  await fetch('/api/reset', { method: 'POST' });
+  loadDashboard();
+}
+
+const evtSource = new EventSource('/api/events');
+evtSource.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  if (data.type === 'attendance_update' || data.type === 'data_reload') {
+    loadDashboard();
+  }
+};
+
+loadDashboard();
+</script>
+</body>
+</html>

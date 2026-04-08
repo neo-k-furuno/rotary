@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="/manifest.json">
+<title>ロータリー受付</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  height: 100%;
+  font-family: 'Noto Sans JP', 'Hiragino Sans', -apple-system, sans-serif;
+  background: #f7f7f7;
+  color: #2c2c2c;
+  overflow: hidden;
+}
+
+.screen { display: none; height: 100vh; flex-direction: column; position: relative; }
+.screen.active { display: flex; }
+
+/* ── Header ── */
+.header {
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  padding: 16px 28px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+.header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+.header-center img {
+  height: 80px;
+  width: auto;
+  object-fit: contain;
+}
+.breadcrumb {
+  font-size: 13px;
+  font-weight: 400;
+  color: #999;
+  letter-spacing: 0.5px;
+}
+
+.btn-back {
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  color: #2c2c2c;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.5px;
+}
+.btn-back:active { background: #f2f2f2; }
+
+/* ── Card Grid ── */
+.card-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px;
+  padding-right: 260px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  -webkit-overflow-scrolling: touch;
+}
+.card-grid.groups { grid-template-columns: repeat(3, 1fr); }
+.card-grid.clubs  { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+/* ── Cards ── */
+.card {
+  position: relative;
+  border-radius: 8px;
+  padding: 32px 20px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s, box-shadow 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 110px;
+  overflow: hidden;
+  letter-spacing: 1px;
+}
+.card:active { transform: scale(0.97); }
+
+.card.group {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  color: #2c2c2c;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  border-left: 4px solid #c8102e;
+}
+.card.group:active {
+  box-shadow: 0 2px 12px rgba(200,16,46,0.10);
+  border-color: #e0e0e0;
+  border-left-color: #c8102e;
+}
+
+.card.club {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  color: #2c2c2c;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.card.club:active {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  border-color: #c8102e;
+}
+
+/* ── Member screen ── */
+.member-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 260px 20px 24px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin: 20px 0 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+}
+.section-label.unattended {
+  background: #fff5f5;
+  border-left: 3px solid #c8102e;
+  color: #c8102e;
+}
+.section-label.attended {
+  background: #f0f9f4;
+  border-left: 3px solid #2e7d32;
+  color: #2e7d32;
+}
+.section-label .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: blink 1.8s ease-in-out infinite;
+}
+.section-label.unattended .dot { background: #c8102e; }
+.section-label.attended .dot { background: #2e7d32; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+.member-grid {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.member-grid.large { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.member-grid.small { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+
+.member-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  color: #2c2c2c;
+}
+.member-card:active { transform: scale(0.96); }
+.member-card.selected {
+  background: #c8102e;
+  border-color: #c8102e;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(200,16,46,0.20);
+}
+.member-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+
+.member-card.small-card {
+  padding: 10px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #f8faf8;
+  border-color: #c8e6c9;
+  color: #2e7d32;
+}
+
+/* ── Bottom register bar ── */
+.register-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid #e5e5e5;
+  padding: 14px 28px;
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.register-count {
+  font-size: 16px;
+  font-weight: 700;
+  color: #c8102e;
+  white-space: nowrap;
+}
+.register-count span { font-size: 22px; }
+
+.btn-confirm {
+  flex: 1;
+  background: #c8102e;
+  color: #fff;
+  border: none;
+  font-size: 20px;
+  font-weight: 700;
+  padding: 18px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  box-shadow: 0 2px 8px rgba(200,16,46,0.18);
+  transition: all 0.12s;
+}
+.btn-confirm:disabled {
+  background: #e0e0e0;
+  box-shadow: none;
+  color: #aaa;
+  cursor: not-allowed;
+}
+.btn-confirm:not(:disabled):active {
+  transform: scale(0.98);
+  background: #a00d24;
+  box-shadow: 0 2px 16px rgba(200,16,46,0.30);
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 480px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+}
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+  margin-bottom: 24px;
+  color: #2c2c2c;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #c8102e;
+}
+.modal-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.modal-item {
+  background: #fafafa;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 20px;
+  font-weight: 500;
+  text-align: center;
+  color: #2c2c2c;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+}
+.btn-modal-cancel {
+  flex: 0 0 auto;
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  color: #666;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 14px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn-modal-cancel:active { background: #f5f5f5; }
+.btn-modal-register {
+  flex: 1;
+  background: #c8102e;
+  color: #fff;
+  border: none;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  box-shadow: 0 2px 8px rgba(200,16,46,0.18);
+}
+.btn-modal-register:active {
+  background: #a00d24;
+  box-shadow: 0 2px 16px rgba(200,16,46,0.30);
+}
+
+/* ── Done screen ── */
+.done-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 20px;
+  background: #fff;
+}
+.done-ring {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: #f0f9f4;
+  border: 2px solid #c8e6c9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: #2e7d32;
+  animation: doneIn 0.4s ease-out;
+}
+@keyframes doneIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* Done screen layout */
+.done-screen {
+  position: relative;
+}
+.done-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: doneIn 0.5s ease-out;
+}
+.done-mascot {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  animation: doneIn 0.6s ease-out;
+}
+.done-mascot-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.done-mascot-body img {
+  width: 300px;
+  height: auto;
+}
+.done-bubble {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  background: #fff;
+  border: 2px solid #d0d0d0;
+  border-radius: 20px;
+  padding: 14px 20px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c2c2c;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+.done-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  margin-left: -10px;
+  border-width: 12px 10px 0 10px;
+  border-style: solid;
+  border-color: #fff transparent transparent transparent;
+}
+.done-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  margin-left: -11px;
+  border-width: 13px 11px 0 11px;
+  border-style: solid;
+  border-color: #d0d0d0 transparent transparent transparent;
+}
+
+.done-msg {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #2c2c2c;
+}
+.done-detail {
+  font-size: 15px;
+  color: #999;
+  font-weight: 400;
+}
+.btn-home {
+  margin-top: 12px;
+  background: #c8102e;
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 16px 48px;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  box-shadow: 0 2px 8px rgba(200,16,46,0.18);
+}
+.btn-home:active { background: #a00d24; }
+
+/* ── Mascot ── */
+.mascot {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 260px;
+  height: 100vh;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 20px;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.mascot.above-register {
+  padding-bottom: 90px;
+}
+.mascot-body {
+  position: relative;
+}
+.mascot-body img {
+  width: 240px;
+  height: auto;
+}
+.mascot-bubble {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  background: #fff;
+  border: 2px solid #d0d0d0;
+  border-radius: 20px;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c2c2c;
+  line-height: 1.5;
+  width: 230px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  white-space: normal;
+}
+.mascot-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  margin-left: -10px;
+  border-width: 12px 10px 0 10px;
+  border-style: solid;
+  border-color: #fff transparent transparent transparent;
+}
+.mascot-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  margin-left: -11px;
+  border-width: 13px 11px 0 11px;
+  border-style: solid;
+  border-color: #d0d0d0 transparent transparent transparent;
+}
+.mascot-name {
+  position: absolute;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.85);
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  border: 1px solid #e0e0e0;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Screen 1: Group Selection -->
+<div id="screen-groups" class="screen active">
+  <div class="header">
+    <div class="header-center">
+      <img src="/logo-rotary-district2700.png" alt="Rotary District 2700">
+    </div>
+  </div>
+  <div id="group-grid" class="card-grid groups"></div>
+</div>
+
+<!-- Screen 2: Club Selection -->
+<div id="screen-clubs" class="screen">
+  <div class="header">
+    <button class="btn-back" onclick="showScreen('groups')">← 戻る</button>
+    <h1><span id="club-title">クラブ選択</span></h1>
+  </div>
+  <div id="club-grid" class="card-grid clubs"></div>
+</div>
+
+<!-- Screen 3: Member Selection -->
+<div id="screen-members" class="screen">
+  <div class="header">
+    <button class="btn-back" onclick="showScreen('clubs')">← 戻る</button>
+    <h1><span id="member-title">名前選択</span></h1>
+  </div>
+  <div class="member-area" id="member-area" style="padding-bottom: 160px;"></div>
+  <div class="register-bar" id="register-bar">
+    <div class="register-count"><span id="selected-count">0</span> 名選択中</div>
+    <button class="btn-confirm" id="btn-to-confirm" disabled onclick="showConfirmModal()">登録する</button>
+  </div>
+</div>
+
+<!-- Screen 4: Done -->
+<div id="screen-done" class="screen done-screen">
+  <div class="done-center">
+    <div class="done-ring">✓</div>
+    <div class="done-msg">登録完了</div>
+    <div class="done-detail" id="done-detail"></div>
+    <button class="btn-home" onclick="showScreen('groups')">トップへ戻る</button>
+  </div>
+  <div class="done-mascot">
+    <div class="done-mascot-body">
+      <div class="done-bubble">出席が登録されました！</div>
+      <img src="/mascot.png" alt="マスコット">
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-title">出席登録の確認</div>
+    <ul class="modal-list" id="confirm-list"></ul>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="hideConfirmModal()">戻る</button>
+      <button class="btn-modal-register" onclick="registerAttendance()">登録する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mascot -->
+<div class="mascot" id="mascot">
+  <div class="mascot-body">
+    <div class="mascot-bubble" id="mascot-bubble">ようこそ！グループを選択してください</div>
+    <img src="/mascot.png" alt="マスコット">
+    <div class="mascot-name">ガバナーエレクト 戸嶋 和夫</div>
+  </div>
+</div>
+
+<script>
+const mascotMessages = {
+  groups: 'ようこそ！グループを選択してください',
+  clubs: 'クラブを選択してください',
+  members: '出席する方の名前をタップしてください',
+  done: 'ありがとうございます！'
+};
+
+function updateMascot(screen) {
+  const bubble = document.getElementById('mascot-bubble');
+  const mascot = document.getElementById('mascot');
+  if (mascotMessages[screen]) {
+    bubble.textContent = mascotMessages[screen];
+  }
+  // Hide on done screen
+  mascot.style.opacity = screen === 'done' ? '0' : '1';
+  // Raise above register bar on members screen
+  if (screen === 'members') {
+    mascot.classList.add('above-register');
+  } else {
+    mascot.classList.remove('above-register');
+  }
+}
+
+let currentGroupId = null;
+let currentGroupName = '';
+let currentClubId = null;
+let currentClubName = '';
+let members = [];
+let selectedIds = new Set();
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  if (name === 'groups') { loadGroups(); selectedIds.clear(); }
+  if (name === 'members') { loadMembers(); }
+  updateMascot(name);
+}
+
+async function loadGroups() {
+  const res = await fetch('/api/groups');
+  const groups = await res.json();
+  const grid = document.getElementById('group-grid');
+  grid.innerHTML = groups.map(g =>
+    `<div class="card group" onclick="selectGroup(${g.id}, '${g.name}')">${g.name}</div>`
+  ).join('');
+}
+
+async function selectGroup(id, name) {
+  currentGroupId = id;
+  currentGroupName = name;
+  document.getElementById('club-title').textContent = name;
+  const res = await fetch(`/api/groups/${id}/clubs`);
+  const clubs = await res.json();
+  document.getElementById('club-grid').innerHTML = clubs.map(c =>
+    `<div class="card club" onclick="selectClub(${c.id}, '${esc(c.name)}')">${esc(c.name)}</div>`
+  ).join('');
+  showScreen('clubs');
+}
+
+async function selectClub(id, name) {
+  currentClubId = id;
+  currentClubName = name;
+  selectedIds.clear();
+  document.getElementById('member-title').textContent = currentGroupName + ' / ' + name;
+  showScreen('members');
+}
+
+async function loadMembers() {
+  const res = await fetch(`/api/clubs/${currentClubId}/members`);
+  members = await res.json();
+  renderMembers();
+}
+
+function renderMembers() {
+  const unattended = members.filter(m => !m.attended);
+  const attended = members.filter(m => m.attended);
+  const area = document.getElementById('member-area');
+  let html = '';
+
+  html += `<div class="section-label unattended"><span class="dot"></span>未出席 ${unattended.length}名</div>`;
+  html += '<div class="member-grid large">';
+  for (const m of unattended) {
+    const sel = selectedIds.has(m.id) ? ' selected' : '';
+    html += `<div class="member-card${sel}" onclick="toggleMember(${m.id})">${esc(m.name)}</div>`;
+  }
+  if (!unattended.length) html += '<div style="padding:24px;color:#aaa;text-align:center;">全員出席済み</div>';
+  html += '</div>';
+
+  html += `<div class="section-label attended"><span class="dot"></span>出席済み ${attended.length}名</div>`;
+  html += '<div class="member-grid small">';
+  for (const m of attended) {
+    html += `<div class="member-card small-card" onclick="cancelAttendance(${m.id}, '${esc(m.name)}')">${esc(m.name)}</div>`;
+  }
+  if (!attended.length) html += '<div style="padding:12px;color:#ccc;text-align:center;">---</div>';
+  html += '</div>';
+
+  area.innerHTML = html;
+  updateSelectionCount();
+}
+
+function toggleMember(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  renderMembers();
+}
+
+function updateSelectionCount() {
+  const c = selectedIds.size;
+  document.getElementById('selected-count').textContent = c;
+  document.getElementById('btn-to-confirm').disabled = c === 0;
+  // Update mascot message based on selection
+  const bubble = document.getElementById('mascot-bubble');
+  if (c > 0) {
+    bubble.textContent = '下の「登録する」ボタンを押してください';
+  } else {
+    bubble.textContent = '出席する方の名前をタップしてください';
+  }
+}
+
+function showConfirmModal() {
+  const selected = members.filter(m => selectedIds.has(m.id));
+  document.getElementById('confirm-list').innerHTML = selected.map(m =>
+    `<li class="modal-item">${esc(m.name)}</li>`
+  ).join('');
+  document.getElementById('confirm-modal').classList.add('active');
+}
+
+function hideConfirmModal() {
+  document.getElementById('confirm-modal').classList.remove('active');
+}
+
+async function registerAttendance() {
+  hideConfirmModal();
+  const ids = Array.from(selectedIds);
+  await fetch('/api/attend', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberIds: ids })
+  });
+  const names = members.filter(m => selectedIds.has(m.id)).map(m => m.name);
+  document.getElementById('done-detail').textContent = names.join('、') + ' さん';
+  selectedIds.clear();
+  showScreen('done');
+}
+
+async function cancelAttendance(id, name) {
+  if (!confirm(`${name} さんの出席を取り消しますか？`)) return;
+  await fetch('/api/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberId: id })
+  });
+  await loadMembers();
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+loadGroups();
+</script>
+</body>
+</html>
