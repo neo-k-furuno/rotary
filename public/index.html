@@ -131,15 +131,26 @@ body.has-conn-bar .screen { padding-top: 28px; }
 .section-heading + .section-heading,
 .card-grid + .section-heading { margin-top: 36px; }
 
+/* 上下セクションを分ける区切り線 */
+.section-divider {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d0d0d0 20%, #d0d0d0 80%, transparent);
+  margin: 16px 0 28px;
+}
+
 /* ── Card Grid ── */
 .card-grid {
   display: grid;
-  gap: 18px;
+  gap: 22px;
   align-content: start;
+  margin-bottom: 22px;
 }
+.card-grid:last-child { margin-bottom: 0; }
 /* 受付トップ画面 */
-.card-grid.groups { grid-template-columns: repeat(3, 1fr); }
-.card-grid.roles  { grid-template-columns: repeat(2, 1fr); }
+.card-grid.groups      { grid-template-columns: repeat(3, 1fr); }
+.card-grid.roles       { grid-template-columns: repeat(2, 1fr); }
+.card-grid.individuals { grid-template-columns: repeat(3, 1fr); }
 /* クラブ画面 */
 .card-grid.clubs {
   flex: 1;
@@ -198,6 +209,31 @@ body.has-conn-bar .screen { padding-top: 28px; }
 }
 .card.role-tag:active {
   box-shadow: 0 2px 12px rgba(184, 134, 11, 0.25);
+}
+
+/* 役職フィルタカード: 役職名のみ表示 (タップで該当役職者の名前一覧へ) */
+.card.individual {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  color: #6b4d00;
+  box-shadow: 0 1px 4px rgba(184, 134, 11, 0.08);
+  border-left: 6px solid #d4af37;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 14px;
+  min-height: 82px;
+  text-align: center;
+}
+.card.individual:active {
+  box-shadow: 0 2px 12px rgba(184, 134, 11, 0.25);
+}
+.card.individual .role-text {
+  font-size: 17px;
+  font-weight: 700;
+  color: #6b4d00;
+  line-height: 1.4;
+  letter-spacing: 0.5px;
 }
 
 .card.club {
@@ -828,10 +864,10 @@ body.has-conn-bar .screen { padding-top: 28px; }
     </div>
   </div>
   <div class="group-screen-body">
-    <div class="section-heading">所属クラブから受付</div>
     <div id="group-grid" class="card-grid groups"></div>
-    <div class="section-heading">ガバナー補佐と2026-27年度 地区委員長の方はこちらから</div>
+    <hr class="section-divider">
     <div id="role-grid" class="card-grid roles"></div>
+    <div id="individual-grid" class="card-grid individuals"></div>
   </div>
 </div>
 
@@ -938,7 +974,7 @@ function updateMascot(screen) {
   }
 }
 
-// 受付モード: 'group' = グループ→クラブ→メンバー, 'tag' = タグ→メンバー
+// 受付モード: 'group' = グループ→クラブ→メンバー, 'tag' = 大タグ→メンバー, 'role' = 役職テキスト→メンバー
 let currentScreen = 'groups';
 let currentMode = 'group';
 let currentGroupId = null;
@@ -946,6 +982,7 @@ let currentGroupName = '';
 let currentClubId = null;
 let currentClubName = '';
 let currentTag = null;       // 大タグ名 (タグモード時)
+let currentRole = null;      // 役職テキスト (roleモード時)
 let currentTagLabel = '';    // 画面表示用ラベル
 let selectedIds = new Set();
 let cancelTargetId = null;
@@ -955,6 +992,24 @@ const ROLE_TAGS = [
   { tag: '2026-27年度・ガバナー補佐', label: '2026-27年度<br>ガバナー補佐' },
   { tag: '協議会主導・委員長',         label: '2026-27年度<br>地区委員長' },
 ];
+
+// 役職フィルタカード (role の値でメンバーをフィルタしてリスト表示)
+const ROLE_FILTER_CARDS = [
+  { role: '次年度地区ラーニングファシリテーター', label: '次年度地区<br>ラーニングファシリテーター' },
+  { role: 'ガバナーノミニー',                       label: 'ガバナーノミニー' },
+  { role: '次年度 戦略計画推進委員長',              label: '次年度<br>戦略計画推進委員長' },
+];
+
+// グループごとのクラブ表示順 (指定順序、ここに無いクラブは末尾)
+const CLUB_ORDER_BY_GROUP = {
+  1: ['豊前RC', '豊前西RC', '苅田RC', '田川RC', '行橋RC', '行橋COSMOSRSC', '行橋みやこRC'],
+  2: ['小倉RC', '小倉中央RC', '小倉東RC', '小倉南RC', '小倉西RC', '門司RC', '門司西RC', '門司西めかりRSC', '戸畑RC', '戸畑東RC', '若松RC', '若松中央RC'],
+  3: ['飯塚RC', '直方RC', '直方中央RC', '遠賀RC', '八幡RC', '八幡RAC', '八幡中央RC', '八幡南RC', '八幡西RC'],
+  4: ['太宰府RC', '福岡RC', '福岡RAC', '福岡エアポートRC', '福岡平成RC', '福岡東RC', '福岡東令和あけぼのRSC', '福岡城南RC', '福岡南RC', '福岡南ファミリアRSC', '福岡南RAC', '福岡東南RC', '福岡東南けやきRSC', '博多イブニングRC', '博多イブニングトワイライトRSC', '宗像RC', '対馬RC', '対馬ちんぐRSC'],
+  5: ['福岡中央RC', '福岡中央エンジョイRSC', '福岡中央RAC', '福岡イブニングRC', '福岡城西RC', '福岡城東RC', '福岡北RC', '福岡西RC', '博多RC', '壱岐RC', '壱岐中央RC', '糸島RC'],
+  6: ['甘木RC', '久留米RC', '久留米中央RC', '久留米中央みらいRSC', '久留米東RC', '久留米北RC', '小郡RC', '小郡七夕RSC', '鳥栖RC', '浮羽RC'],
+  7: ['筑後RC', '大川RC', '大牟田RC', '大牟田北RC', '大牟田南RC', '八女RC', '八女グリーンRSC', '柳川RC'],
+};
 
 function showScreen(name) {
   currentScreen = name;
@@ -994,6 +1049,27 @@ function renderGroups() {
   for (const el of roleGrid.querySelectorAll('.card.role-tag')) {
     el.addEventListener('click', () => selectTag(el.dataset.tag, el.dataset.label));
   }
+
+  // 役職フィルタカード (タップで該当 role の人を一覧表示)
+  const indivGrid = document.getElementById('individual-grid');
+  indivGrid.innerHTML = ROLE_FILTER_CARDS.map(rf => {
+    return `<div class="card individual" data-role="${esc(rf.role)}" data-label="${esc(rf.label.replace(/<br>/g, ' '))}">
+      <div class="role-text">${rf.label}</div>
+    </div>`;
+  }).join('');
+  for (const el of indivGrid.querySelectorAll('.card.individual')) {
+    el.addEventListener('click', () => selectRole(el.dataset.role, el.dataset.label));
+  }
+}
+
+function selectRole(role, label) {
+  currentMode = 'role';
+  currentRole = role;
+  currentTagLabel = label;
+  selectedIds.clear();
+  setGoldTheme(true);
+  document.getElementById('member-title').textContent = label;
+  showScreen('members');
 }
 
 function selectGroup(id, name) {
@@ -1017,7 +1093,18 @@ function selectTag(tag, label) {
 
 function renderClubs() {
   if (!currentGroupId) return;
-  const clubs = RA.getClubsByGroup(currentGroupId);
+  const clubs = RA.getClubsByGroup(currentGroupId).slice();
+  // 指定順に並べる (CLUB_ORDER_BY_GROUP に無いクラブは末尾、その中では名前順)
+  const order = CLUB_ORDER_BY_GROUP[currentGroupId] || [];
+  const idx = (name) => {
+    const i = order.indexOf(name);
+    return i >= 0 ? i : 999;
+  };
+  clubs.sort((a, b) => {
+    const da = idx(a.name), db = idx(b.name);
+    if (da !== db) return da - db;
+    return a.name.localeCompare(b.name, 'ja');
+  });
   const grid = document.getElementById('club-grid');
   grid.innerHTML = clubs.map(c =>
     `<div class="card club" data-id="${c.id}" data-name="${esc(c.name)}">${esc(c.name)}</div>`
@@ -1038,12 +1125,16 @@ function selectClub(id, name) {
 
 // メンバー画面の戻るボタン: モードに応じて遷移先を切り替え
 function backFromMembers() {
-  if (currentMode === 'tag') showScreen('groups');
-  else                       showScreen('clubs');
+  if (currentMode === 'tag' || currentMode === 'role') showScreen('groups');
+  else                                                  showScreen('clubs');
 }
 
 function getCurrentMembers() {
-  if (currentMode === 'tag') return RA.getMembersByTag(currentTag);
+  if (currentMode === 'tag')  return RA.getMembersByTag(currentTag);
+  if (currentMode === 'role') {
+    const all = RA.getSnapshot() ? RA.getSnapshot().members : [];
+    return all.filter(m => m.role === currentRole);
+  }
   return RA.getMembersByClub(currentClubId);
 }
 
