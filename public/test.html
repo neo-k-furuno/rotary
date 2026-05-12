@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>接続テスト - ロータリー受付</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Noto Sans JP', -apple-system, sans-serif;
+  background: #f7f7f7; color: #1e293b;
+  padding: 24px; min-height: 100vh;
+}
+h1 {
+  font-size: 22px; font-weight: 900; letter-spacing: 2px;
+  margin-bottom: 6px; color: #c8102e;
+}
+.sub { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.card .num {
+  font-size: 28px; font-weight: 900;
+  color: #1e293b;
+}
+.card.success .num { color: #16a34a; }
+.card.fail .num { color: #dc2626; }
+.card.latency .num { color: #6366f1; }
+.card .label {
+  font-size: 11px; color: #94a3b8;
+  letter-spacing: 1px; font-weight: 700; margin-top: 4px;
+}
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.actions button {
+  padding: 10px 20px;
+  border-radius: 8px; border: 1px solid #d0d0d0;
+  background: #fff; color: #1e293b;
+  font-weight: 700; cursor: pointer;
+  font-size: 13px;
+}
+.actions button.primary {
+  background: #c8102e; color: #fff; border-color: #c8102e;
+}
+.actions button:active { transform: scale(0.97); }
+
+.log {
+  background: #0f172a; color: #cbd5e1;
+  border-radius: 12px;
+  font-family: 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 16px;
+  height: 360px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.log .ok { color: #4ade80; }
+.log .ng { color: #f87171; }
+.log .info { color: #94a3b8; }
+
+.tip {
+  background: #fff;
+  border-left: 3px solid #c8102e;
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.6;
+}
+.tip strong { color: #c8102e; }
+</style>
+</head>
+<body>
+<h1>会場WiFi 接続テスト</h1>
+<p class="sub">サーバーとの接続状態を継続的に計測します。受付を始める前に異常がないか確認してください。</p>
+
+<div class="summary">
+  <div class="card success"><div class="num" id="ok-count">0</div><div class="label">成功</div></div>
+  <div class="card fail"><div class="num" id="ng-count">0</div><div class="label">失敗</div></div>
+  <div class="card"><div class="num" id="rate">100%</div><div class="label">成功率</div></div>
+  <div class="card latency"><div class="num" id="avg">- ms</div><div class="label">平均レイテンシ</div></div>
+</div>
+
+<div class="actions">
+  <button class="primary" id="btn-toggle">テスト停止</button>
+  <button id="btn-clear">ログをクリア</button>
+  <button id="btn-snapshot">snapshot 取得テスト</button>
+  <button onclick="location.href='/'">受付画面へ</button>
+  <button onclick="location.href='/dashboard.html'">ダッシュボードへ</button>
+</div>
+
+<div class="log" id="log"></div>
+
+<div class="tip">
+  <strong>使い方:</strong> このページを開いたまま会場内を歩き、受付・ステージ・客席など各位置で 1 分ずつ動作を確認してください。<br>
+  成功率 99% 以上・平均レイテンシ 200ms 以内を目安にしてください。それ以下なら受付位置の見直しか中継機の検討を。
+</div>
+
+<script>
+let ok = 0, ng = 0;
+let latencies = [];
+let running = true;
+const logEl = document.getElementById('log');
+
+function log(level, msg) {
+  const d = new Date();
+  const t = d.toLocaleTimeString('ja-JP');
+  const cls = level === 'ok' ? 'ok' : level === 'ng' ? 'ng' : 'info';
+  logEl.innerHTML = `<span class="${cls}">[${t}] ${escapeHtml(msg)}</span>\n` + logEl.innerHTML;
+  // 200行で打ち切り
+  const lines = logEl.innerHTML.split('\n');
+  if (lines.length > 200) logEl.innerHTML = lines.slice(0, 200).join('\n');
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+function updateStats() {
+  document.getElementById('ok-count').textContent = ok;
+  document.getElementById('ng-count').textContent = ng;
+  const total = ok + ng;
+  const rate = total === 0 ? 100 : Math.round(ok / total * 1000) / 10;
+  document.getElementById('rate').textContent = rate + '%';
+  if (latencies.length > 0) {
+    const recent = latencies.slice(-20);
+    const avg = Math.round(recent.reduce((a, b) => a + b, 0) / recent.length);
+    document.getElementById('avg').textContent = avg + ' ms';
+  }
+}
+
+async function pingOnce() {
+  const start = performance.now();
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch('/api/ping?t=' + Date.now(), {
+      signal: ctrl.signal, cache: 'no-store'
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('http ' + res.status);
+    const ms = Math.round(performance.now() - start);
+    latencies.push(ms);
+    if (latencies.length > 100) latencies.shift();
+    ok++;
+    if (ms > 800) log('ng', `ping ${ms}ms (遅延あり)`);
+    else log('ok', `ping ${ms}ms`);
+  } catch (e) {
+    ng++;
+    log('ng', `ping 失敗: ${e.name === 'AbortError' ? 'タイムアウト(4秒)' : e.message}`);
+  }
+  updateStats();
+}
+
+async function snapshotTest() {
+  const start = performance.now();
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch('/api/snapshot?t=' + Date.now(), {
+      signal: ctrl.signal, cache: 'no-store'
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    const ms = Math.round(performance.now() - start);
+    log('ok', `snapshot 取得成功: ${data.members.length}名 / ${data.clubs.length}クラブ / ${ms}ms`);
+  } catch (e) {
+    log('ng', `snapshot 失敗: ${e.message}`);
+  }
+}
+
+let timer = null;
+function start() {
+  if (timer) return;
+  running = true;
+  document.getElementById('btn-toggle').textContent = 'テスト停止';
+  log('info', 'テスト開始');
+  pingOnce();
+  timer = setInterval(pingOnce, 1500);
+}
+function stop() {
+  if (!timer) return;
+  clearInterval(timer);
+  timer = null;
+  running = false;
+  document.getElementById('btn-toggle').textContent = 'テスト再開';
+  log('info', 'テスト停止');
+}
+
+document.getElementById('btn-toggle').onclick = () => running ? stop() : start();
+document.getElementById('btn-clear').onclick = () => {
+  ok = 0; ng = 0; latencies = [];
+  logEl.innerHTML = '';
+  updateStats();
+  log('info', 'ログクリア');
+};
+document.getElementById('btn-snapshot').onclick = snapshotTest;
+
+// SSE 安定性チェック
+let sseEvents = 0;
+let sseSource = null;
+function startSSEMonitor() {
+  if (sseSource) try { sseSource.close(); } catch (e) {}
+  sseSource = new EventSource('/api/events');
+  sseSource.onopen = () => log('info', 'SSE 接続OK');
+  sseSource.onmessage = () => {
+    sseEvents++;
+    log('info', `SSE 受信 (${sseEvents}件目)`);
+  };
+  sseSource.onerror = () => {
+    log('ng', 'SSE 切断 - 5秒後に再接続');
+    try { sseSource.close(); } catch (e) {}
+    sseSource = null;
+    setTimeout(startSSEMonitor, 5000);
+  };
+}
+startSSEMonitor();
+
+start();
+</script>
+</body>
+</html>

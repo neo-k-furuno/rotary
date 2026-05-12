@@ -4,3 +4,8 @@ attendance.db-shm
 attendance.db-wal
 .claude/
 *.png.bak
+
+# 本番名簿データ (個人情報のため公開リポジトリには含めない)
+data/
+*.xlsx
+

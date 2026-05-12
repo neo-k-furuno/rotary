@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT, 10) || 3000;
 
 // --- Database Setup ---
 const db = new Database(path.join(__dirname, 'attendance.db'));
@@ -29,10 +29,21 @@ db.exec(`
     club_id INTEGER NOT NULL REFERENCES clubs(id),
     name TEXT NOT NULL,
     name_kana TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT '',
+    tag TEXT NOT NULL DEFAULT '',
     attended INTEGER NOT NULL DEFAULT 0,
     attended_at TEXT
   );
 `);
+
+// 既存DBから role / tag カラムが無ければ追加 (マイグレーション)
+const memberCols = db.prepare("PRAGMA table_info(members)").all().map(c => c.name);
+if (!memberCols.includes('role')) {
+  db.exec("ALTER TABLE members ADD COLUMN role TEXT NOT NULL DEFAULT ''");
+}
+if (!memberCols.includes('tag')) {
+  db.exec("ALTER TABLE members ADD COLUMN tag TEXT NOT NULL DEFAULT ''");
+}
 
 // --- SSE for real-time updates ---
 const sseClients = new Set();
@@ -72,23 +83,72 @@ app.get('/api/groups/:groupId/clubs', (req, res) => {
 
 // --- API: Members by club ---
 app.get('/api/clubs/:clubId/members', (req, res) => {
-  const rows = db.prepare('SELECT id, name, name_kana, attended FROM members WHERE club_id = ? ORDER BY name_kana, name').all(req.params.clubId);
+  const rows = db.prepare(
+    'SELECT id, name, name_kana, role, tag, attended FROM members WHERE club_id = ? ORDER BY name_kana, name'
+  ).all(req.params.clubId);
   res.json(rows);
 });
 
 // --- API: Mark attendance (multiple) ---
+// 冪等。既に出席済みの場合 attended_at は上書きしない（先勝ち）。
+// client_ts を受け取り、オフライン中の操作でも本来の受付時刻を記録する。
+// レスポンスには各IDが「新規登録」だったか「既に出席済み」だったかを返し、
+// 別端末で先に受付された場合に運用者が気付けるようにする。
 app.post('/api/attend', (req, res) => {
-  const { memberIds } = req.body;
+  const { memberIds, client_ts } = req.body;
   if (!Array.isArray(memberIds) || memberIds.length === 0) {
     return res.status(400).json({ error: 'memberIds required' });
   }
-  const stmt = db.prepare('UPDATE members SET attended = 1, attended_at = datetime(\'now\', \'localtime\') WHERE id = ?');
+  const ts = client_ts || nowLocal();
+  const placeholders = memberIds.map(() => '?').join(',');
+  const before = db.prepare(
+    `SELECT id, name, attended, attended_at FROM members WHERE id IN (${placeholders})`
+  ).all(...memberIds);
+  const beforeMap = new Map(before.map((m) => [m.id, m]));
+
+  const stmt = db.prepare(
+    'UPDATE members SET attended = 1, attended_at = COALESCE(attended_at, ?) WHERE id = ?'
+  );
   const tx = db.transaction((ids) => {
-    for (const id of ids) stmt.run(id);
+    for (const id of ids) stmt.run(ts, id);
   });
   tx(memberIds);
+
+  const results = memberIds.map((id) => {
+    const m = beforeMap.get(id);
+    if (!m) return { id, status: 'not_found' };
+    return {
+      id,
+      name: m.name,
+      status: m.attended === 1 ? 'already_attended' : 'newly_attended',
+      attended_at: m.attended === 1 ? m.attended_at : ts,
+    };
+  });
+
   broadcast({ type: 'attendance_update' });
-  res.json({ ok: true });
+  res.json({ ok: true, results });
+});
+
+function nowLocal() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// --- API: Snapshot (groups + clubs + members を一括取得) ---
+// iPad 起動時に1回だけ叩く想定。以後は SSE でローカルキャッシュを更新。
+app.get('/api/snapshot', (req, res) => {
+  const groups = db.prepare('SELECT id, name FROM groups_tbl ORDER BY id').all();
+  const clubs = db.prepare('SELECT id, group_id, name FROM clubs ORDER BY group_id, name').all();
+  const members = db.prepare(
+    'SELECT id, club_id, name, name_kana, role, tag, attended, attended_at FROM members ORDER BY club_id, name_kana, name'
+  ).all();
+  res.json({ groups, clubs, members, server_ts: nowLocal() });
+});
+
+// --- API: Ping (接続テスト用) ---
+app.get('/api/ping', (req, res) => {
+  res.json({ ok: true, ts: Date.now() });
 });
 
 // --- API: Cancel attendance ---
@@ -114,7 +174,9 @@ app.get('/api/dashboard', (req, res) => {
   `).all();
 
   const members = db.prepare(`
-    SELECT m.id, m.name, m.attended, m.attended_at, c.name as club_name, g.name as group_name
+    SELECT m.id, m.name, m.role, m.tag, m.attended, m.attended_at,
+      c.id as club_id, c.name as club_name,
+      g.id as group_id, g.name as group_name
     FROM members m
     JOIN clubs c ON m.club_id = c.id
     JOIN groups_tbl g ON c.group_id = g.id
@@ -127,10 +189,41 @@ app.get('/api/dashboard', (req, res) => {
   res.json({ clubs, members, totalMembers, totalAttended });
 });
 
+// --- CSV helpers ---
+function csvQuote(s) {
+  if (s == null) return '';
+  const v = String(s);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+// 1行を CSV カラムに分解 (簡易: 引用符内のカンマに対応)
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else { inQ = false; }
+      } else {
+        cur += ch;
+      }
+    } else {
+      if (ch === ',') { out.push(cur); cur = ''; }
+      else if (ch === '"' && cur === '') { inQ = true; }
+      else { cur += ch; }
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
 // --- API: CSV Export ---
 app.get('/api/export', (req, res) => {
   const rows = db.prepare(`
     SELECT g.name as group_name, c.name as club_name, m.name as member_name,
+      m.role, m.tag,
       CASE WHEN m.attended = 1 THEN '出席' ELSE '未出席' END as status,
       COALESCE(m.attended_at, '') as attended_at
     FROM members m
@@ -140,9 +233,13 @@ app.get('/api/export', (req, res) => {
   `).all();
 
   const BOM = '\uFEFF';
-  let csv = BOM + 'グループ,クラブ,名前,出欠,出席時刻\n';
+  let csv = BOM + 'グループ,クラブ,名前,役職,大タグ,出欠,出席時刻\n';
   for (const r of rows) {
-    csv += `${r.group_name},${r.club_name},${r.member_name},${r.status},${r.attended_at}\n`;
+    csv += [
+      csvQuote(r.group_name), csvQuote(r.club_name), csvQuote(r.member_name),
+      csvQuote(r.role), csvQuote(r.tag),
+      r.status, r.attended_at,
+    ].join(',') + '\n';
   }
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -168,11 +265,13 @@ app.post('/api/import', upload.single('file'), (req, res) => {
     const insertGroup = db.prepare('INSERT OR IGNORE INTO groups_tbl (id, name) VALUES (?, ?)');
     const findClub = db.prepare('SELECT id FROM clubs WHERE group_id = ? AND name = ?');
     const insertClub = db.prepare('INSERT INTO clubs (group_id, name) VALUES (?, ?)');
-    const insertMember = db.prepare('INSERT INTO members (club_id, name, name_kana) VALUES (?, ?, ?)');
+    const insertMember = db.prepare(
+      'INSERT INTO members (club_id, name, name_kana, role, tag) VALUES (?, ?, ?, ?, ?)'
+    );
 
     const tx = db.transaction((lines) => {
       for (const line of lines) {
-        const cols = line.split(',').map(c => c.trim());
+        const cols = parseCsvLine(line);
         if (cols.length < 4) continue;
 
         const groupId = parseInt(cols[0], 10);
@@ -180,6 +279,8 @@ app.post('/api/import', upload.single('file'), (req, res) => {
         const clubName = cols[2];
         const memberName = cols[3];
         const memberKana = cols[4] || '';
+        const memberRole = cols[5] || '';
+        const memberTag  = cols[6] || '';
 
         if (!groupId || !groupName || !clubName || !memberName) continue;
 
@@ -191,7 +292,7 @@ app.post('/api/import', upload.single('file'), (req, res) => {
           club = { id: info.lastInsertRowid };
         }
 
-        insertMember.run(club.id, memberName, memberKana);
+        insertMember.run(club.id, memberName, memberKana, memberRole, memberTag);
       }
     });
 
@@ -279,7 +380,7 @@ function seedDummyData() {
   console.log(`Seeded ${memberCount} members`);
 }
 
-seedDummyData();
+// ダミーデータは本番運用のため自動投入しない (必要なら手動で seedDummyData() を呼ぶ)
 
 // --- Start ---
 app.listen(PORT, '0.0.0.0', () => {

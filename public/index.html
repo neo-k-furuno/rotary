@@ -21,6 +21,34 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Connection status bar ── */
+.conn-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 200;
+  height: 0;
+  overflow: hidden;
+  transition: height 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #fff;
+}
+.conn-bar.show { height: 28px; }
+.conn-bar.offline { background: #c8102e; }
+.conn-bar.syncing { background: #d97706; }
+.conn-bar .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #fff; margin-right: 8px;
+  animation: cblink 1.2s infinite;
+}
+@keyframes cblink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+body.has-conn-bar .screen { padding-top: 28px; }
+
 .screen { display: none; height: 100vh; flex-direction: column; position: relative; }
 .screen.active { display: flex; }
 
@@ -211,6 +239,10 @@ html, body {
   border-color: #c8e6c9;
   color: #2e7d32;
 }
+.member-card.small-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ── Bottom register bar ── */
 .register-bar {
@@ -346,6 +378,74 @@ html, body {
   background: #a00d24;
   box-shadow: 0 2px 16px rgba(200,16,46,0.30);
 }
+.modal-warn {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #c8102e;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.modal-item.dup {
+  background: #fff5f5;
+  border-color: #fecaca;
+  color: #c8102e;
+  font-size: 16px;
+}
+.modal-item .ts {
+  display: inline-block;
+  margin-left: 12px;
+  font-size: 12px;
+  color: #999;
+  font-weight: 400;
+}
+.modal-item.dup .ts { color: #c8102e; opacity: 0.7; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(15,23,42,0.94);
+  color: #fff;
+  padding: 14px 22px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+  z-index: 250;
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+  max-width: 80%;
+  text-align: center;
+  letter-spacing: 0.5px;
+  line-height: 1.5;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.toast.warn { background: rgba(200,16,46,0.94); }
+
+/* ── Done screen warn ── */
+.done-warn {
+  margin-top: 8px;
+  padding: 10px 16px;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #c8102e;
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 480px;
+  text-align: center;
+  line-height: 1.5;
+}
 
 /* ── Done screen ── */
 .done-screen {
@@ -374,10 +474,7 @@ html, body {
   0% { transform: scale(0.6); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
-/* Done screen layout */
-.done-screen {
-  position: relative;
-}
+.done-screen { position: relative; }
 .done-center {
   display: flex;
   flex-direction: column;
@@ -545,13 +642,47 @@ html, body {
   border: 1px solid #e0e0e0;
 }
 
-/* ── Scrollbar ── */
+/* ── Loading splash ── */
+.splash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+  transition: opacity 0.3s;
+}
+.splash.hidden { opacity: 0; pointer-events: none; }
+.splash-spinner {
+  width: 36px; height: 36px;
+  border: 3px solid #f0f0f0;
+  border-top-color: #c8102e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.splash-text { color: #666; font-size: 14px; letter-spacing: 1px; }
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 2px; }
 </style>
 </head>
 <body>
+
+<!-- Connection status bar -->
+<div class="conn-bar" id="conn-bar">
+  <span class="dot"></span><span id="conn-text">オフライン中</span>
+</div>
+
+<!-- Splash (initial load) -->
+<div class="splash" id="splash">
+  <div class="splash-spinner"></div>
+  <div class="splash-text">読み込み中...</div>
+</div>
 
 <!-- Screen 1: Group Selection -->
 <div id="screen-groups" class="screen active">
@@ -591,6 +722,7 @@ html, body {
     <div class="done-ring">✓</div>
     <div class="done-msg">登録完了</div>
     <div class="done-detail" id="done-detail"></div>
+    <div class="done-warn" id="done-warn" style="display:none;"></div>
     <button class="btn-home" onclick="showScreen('groups')">トップへ戻る</button>
   </div>
   <div class="done-mascot">
@@ -601,10 +733,11 @@ html, body {
   </div>
 </div>
 
-<!-- Confirm Modal -->
+<!-- Confirm register Modal -->
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal">
     <div class="modal-title">出席登録の確認</div>
+    <div class="modal-warn modal-warn-slot" style="display:none;"></div>
     <ul class="modal-list" id="confirm-list"></ul>
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="hideConfirmModal()">戻る</button>
@@ -612,6 +745,24 @@ html, body {
     </div>
   </div>
 </div>
+
+<!-- Cancel Modal (出席取消) -->
+<div class="modal-overlay" id="cancel-modal">
+  <div class="modal">
+    <div class="modal-title">出席を取り消す</div>
+    <ul class="modal-list">
+      <li class="modal-item" id="cancel-name"></li>
+    </ul>
+    <div class="modal-warn">この操作は取り消せません</div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="hideCancelModal()">戻る</button>
+      <button class="btn-modal-register" onclick="confirmCancel()">取り消す</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <!-- Mascot -->
 <div class="mascot" id="mascot">
@@ -622,6 +773,7 @@ html, body {
   </div>
 </div>
 
+<script src="/sync.js?v=4"></script>
 <script>
 const mascotMessages = {
   groups: 'ようこそ！グループを選択してください',
@@ -636,9 +788,7 @@ function updateMascot(screen) {
   if (mascotMessages[screen]) {
     bubble.textContent = mascotMessages[screen];
   }
-  // Hide on done screen
   mascot.style.opacity = screen === 'done' ? '0' : '1';
-  // Raise above register bar on members screen
   if (screen === 'members') {
     mascot.classList.add('above-register');
   } else {
@@ -646,43 +796,55 @@ function updateMascot(screen) {
   }
 }
 
+let currentScreen = 'groups';
 let currentGroupId = null;
 let currentGroupName = '';
 let currentClubId = null;
 let currentClubName = '';
-let members = [];
 let selectedIds = new Set();
+let cancelTargetId = null;
 
 function showScreen(name) {
+  currentScreen = name;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
-  if (name === 'groups') { loadGroups(); selectedIds.clear(); }
-  if (name === 'members') { loadMembers(); }
+  if (name === 'groups') { renderGroups(); selectedIds.clear(); }
+  if (name === 'clubs')  { renderClubs(); }
+  if (name === 'members'){ renderMembers(); }
   updateMascot(name);
 }
 
-async function loadGroups() {
-  const res = await fetch('/api/groups');
-  const groups = await res.json();
+function renderGroups() {
+  const groups = RA.getGroups();
   const grid = document.getElementById('group-grid');
   grid.innerHTML = groups.map(g =>
-    `<div class="card group" onclick="selectGroup(${g.id}, '${g.name}')">${g.name}</div>`
+    `<div class="card group" data-id="${g.id}" data-name="${esc(g.name)}">${esc(g.name)}</div>`
   ).join('');
+  for (const el of grid.querySelectorAll('.card.group')) {
+    el.addEventListener('click', () => selectGroup(Number(el.dataset.id), el.dataset.name));
+  }
 }
 
-async function selectGroup(id, name) {
+function selectGroup(id, name) {
   currentGroupId = id;
   currentGroupName = name;
   document.getElementById('club-title').textContent = name;
-  const res = await fetch(`/api/groups/${id}/clubs`);
-  const clubs = await res.json();
-  document.getElementById('club-grid').innerHTML = clubs.map(c =>
-    `<div class="card club" onclick="selectClub(${c.id}, '${esc(c.name)}')">${esc(c.name)}</div>`
-  ).join('');
   showScreen('clubs');
 }
 
-async function selectClub(id, name) {
+function renderClubs() {
+  if (!currentGroupId) return;
+  const clubs = RA.getClubsByGroup(currentGroupId);
+  const grid = document.getElementById('club-grid');
+  grid.innerHTML = clubs.map(c =>
+    `<div class="card club" data-id="${c.id}" data-name="${esc(c.name)}">${esc(c.name)}</div>`
+  ).join('');
+  for (const el of grid.querySelectorAll('.card.club')) {
+    el.addEventListener('click', () => selectClub(Number(el.dataset.id), el.dataset.name));
+  }
+}
+
+function selectClub(id, name) {
   currentClubId = id;
   currentClubName = name;
   selectedIds.clear();
@@ -690,18 +852,15 @@ async function selectClub(id, name) {
   showScreen('members');
 }
 
-async function loadMembers() {
-  const res = await fetch(`/api/clubs/${currentClubId}/members`);
-  members = await res.json();
-  renderMembers();
-}
-
 function renderMembers() {
+  if (!currentClubId) return;
+  const members = RA.getMembersByClub(currentClubId);
   const unattended = members.filter(m => !m.attended);
   const attended = members.filter(m => m.attended);
   const area = document.getElementById('member-area');
-  let html = '';
+  const isOnline = RA.getStatus().online !== false;
 
+  let html = '';
   html += `<div class="section-label unattended"><span class="dot"></span>未出席 ${unattended.length}名</div>`;
   html += '<div class="member-grid large">';
   for (const m of unattended) {
@@ -714,7 +873,9 @@ function renderMembers() {
   html += `<div class="section-label attended"><span class="dot"></span>出席済み ${attended.length}名</div>`;
   html += '<div class="member-grid small">';
   for (const m of attended) {
-    html += `<div class="member-card small-card" onclick="cancelAttendance(${m.id}, '${esc(m.name)}')">${esc(m.name)}</div>`;
+    const cls = isOnline ? '' : ' disabled';
+    const handler = isOnline ? `onclick="askCancel(${m.id})"` : '';
+    html += `<div class="member-card small-card${cls}" ${handler}>${esc(m.name)}</div>`;
   }
   if (!attended.length) html += '<div style="padding:12px;color:#ccc;text-align:center;">---</div>';
   html += '</div>';
@@ -733,49 +894,84 @@ function updateSelectionCount() {
   const c = selectedIds.size;
   document.getElementById('selected-count').textContent = c;
   document.getElementById('btn-to-confirm').disabled = c === 0;
-  // Update mascot message based on selection
   const bubble = document.getElementById('mascot-bubble');
-  if (c > 0) {
-    bubble.textContent = '下の「登録する」ボタンを押してください';
-  } else {
-    bubble.textContent = '出席する方の名前をタップしてください';
-  }
+  if (c > 0) bubble.textContent = '下の「登録する」ボタンを押してください';
+  else bubble.textContent = '出席する方の名前をタップしてください';
 }
 
 function showConfirmModal() {
+  const members = RA.getMembersByClub(currentClubId);
   const selected = members.filter(m => selectedIds.has(m.id));
-  document.getElementById('confirm-list').innerHTML = selected.map(m =>
-    `<li class="modal-item">${esc(m.name)}</li>`
-  ).join('');
-  document.getElementById('confirm-modal').classList.add('active');
-}
+  const dups = selected.filter(m => m.attended);
 
+  // 重複警告 + リスト本体を組み立てる
+  const modal = document.getElementById('confirm-modal');
+  const warnEl = modal.querySelector('.modal-warn-slot');
+  if (dups.length > 0) {
+    warnEl.style.display = 'block';
+    warnEl.textContent = `⚠ ${dups.length}名は既に他の受付で登録されています（重複登録は無視されます）`;
+  } else {
+    warnEl.style.display = 'none';
+  }
+
+  document.getElementById('confirm-list').innerHTML = selected.map(m => {
+    const cls = m.attended ? ' dup' : '';
+    const ts = m.attended ? `<span class="ts">${esc(m.attended_at || '')}</span>` : '';
+    return `<li class="modal-item${cls}">${esc(m.name)}${ts}</li>`;
+  }).join('');
+  modal.classList.add('active');
+}
 function hideConfirmModal() {
   document.getElementById('confirm-modal').classList.remove('active');
 }
 
-async function registerAttendance() {
+function registerAttendance() {
   hideConfirmModal();
   const ids = Array.from(selectedIds);
-  await fetch('/api/attend', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ memberIds: ids })
-  });
-  const names = members.filter(m => selectedIds.has(m.id)).map(m => m.name);
-  document.getElementById('done-detail').textContent = names.join('、') + ' さん';
+  if (ids.length === 0) return;
+  const members = RA.getMembersByClub(currentClubId);
+  const selected = members.filter(m => selectedIds.has(m.id));
+  const newOnes = selected.filter(m => !m.attended);
+  const dups = selected.filter(m => m.attended);
+
+  RA.enqueueAttend(ids); // 楽観的更新 + バックグラウンド送信
+
+  // done 画面に表示する内訳
+  const detail = document.getElementById('done-detail');
+  const warn = document.getElementById('done-warn');
+  if (newOnes.length > 0) {
+    detail.textContent = newOnes.map(m => m.name).join('、') + ' さん（' + newOnes.length + '名）';
+  } else {
+    detail.textContent = '（新規登録は0名）';
+  }
+  if (dups.length > 0) {
+    const dupList = dups.map(m => `${m.name}（${m.attended_at || '時刻不明'}）`).join('、');
+    warn.textContent = `※ ${dups.length}名は既に他の受付で登録されていました: ${dupList}`;
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+
   selectedIds.clear();
   showScreen('done');
 }
 
-async function cancelAttendance(id, name) {
-  if (!confirm(`${name} さんの出席を取り消しますか？`)) return;
-  await fetch('/api/cancel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ memberId: id })
-  });
-  await loadMembers();
+function askCancel(id) {
+  if (RA.getStatus().online === false) return; // オフライン中は無効
+  const m = RA.getMember(id);
+  if (!m) return;
+  cancelTargetId = id;
+  document.getElementById('cancel-name').textContent = m.name + ' さん';
+  document.getElementById('cancel-modal').classList.add('active');
+}
+function hideCancelModal() {
+  document.getElementById('cancel-modal').classList.remove('active');
+  cancelTargetId = null;
+}
+function confirmCancel() {
+  if (cancelTargetId == null) return;
+  RA.enqueueCancel(cancelTargetId);
+  hideCancelModal();
 }
 
 function esc(str) {
@@ -784,7 +980,83 @@ function esc(str) {
   return d.innerHTML;
 }
 
-loadGroups();
+// 接続ステータスバー
+function updateConnBar() {
+  const s = RA.getStatus();
+  const bar = document.getElementById('conn-bar');
+  const text = document.getElementById('conn-text');
+
+  if (s.online === false) {
+    bar.classList.add('show', 'offline');
+    bar.classList.remove('syncing');
+    text.textContent = s.queueSize > 0
+      ? `オフライン中 ｜ 未送信 ${s.queueSize} 件（自動再送信します）`
+      : 'オフライン中（受付は継続できます）';
+    document.body.classList.add('has-conn-bar');
+  } else if (s.queueSize > 0) {
+    bar.classList.add('show', 'syncing');
+    bar.classList.remove('offline');
+    text.textContent = `同期中 ｜ ${s.queueSize} 件送信中...`;
+    document.body.classList.add('has-conn-bar');
+  } else {
+    bar.classList.remove('show', 'offline', 'syncing');
+    document.body.classList.remove('has-conn-bar');
+  }
+}
+
+// 現在画面のみ再描画
+function rerenderCurrent() {
+  if (currentScreen === 'groups') renderGroups();
+  else if (currentScreen === 'clubs') renderClubs();
+  else if (currentScreen === 'members') renderMembers();
+}
+
+// トースト通知（自動消失）
+let toastTimer = null;
+function showToast(message, opts = {}) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('warn');
+  if (opts.warn) el.classList.add('warn');
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), opts.duration || 3500);
+}
+
+// SSE 同期時の自動プルーン: 別端末で先に登録された人を選択から外す
+function pruneSelectionFromSnapshot() {
+  if (currentScreen !== 'members' || selectedIds.size === 0) return;
+  const members = RA.getMembersByClub(currentClubId);
+  const removed = [];
+  for (const m of members) {
+    if (selectedIds.has(m.id) && m.attended) {
+      selectedIds.delete(m.id);
+      removed.push(m);
+    }
+  }
+  if (removed.length > 0) {
+    const names = removed.map(m => m.name).join('、');
+    showToast(`${names} さんは他の受付で登録されました`, { warn: true });
+  }
+}
+
+RA.on('snapshot', () => {
+  pruneSelectionFromSnapshot();
+  rerenderCurrent();
+  // splash を消す（最初の snapshot が来たら）
+  document.getElementById('splash').classList.add('hidden');
+});
+RA.on('status', updateConnBar);
+RA.on('queue', updateConnBar);
+
+(async function () {
+  await RA.init();
+  rerenderCurrent();
+  updateConnBar();
+  // snapshot がキャッシュにあった場合の初期描画
+  document.getElementById('splash').classList.add('hidden');
+})();
 </script>
 </body>
 </html>
