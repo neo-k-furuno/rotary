@@ -13,6 +13,21 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ── テーマカラー (タグ画面で金色に切替え) ── */
+:root {
+  --primary:        #c8102e;
+  --primary-dark:   #a00d24;
+  --primary-shadow: rgba(200, 16, 46, 0.18);
+  --primary-bg:     #fff5f5;
+}
+body.theme-gold {
+  --primary:        #b8860b;
+  --primary-dark:   #8b6508;
+  --primary-shadow: rgba(184, 134, 11, 0.30);
+  --primary-bg:     #fdf8e7;
+}
+
 html, body {
   height: 100%;
   font-family: 'Noto Sans JP', 'Hiragino Sans', -apple-system, sans-serif;
@@ -38,7 +53,7 @@ html, body {
   color: #fff;
 }
 .conn-bar.show { height: 28px; }
-.conn-bar.offline { background: #c8102e; }
+.conn-bar.offline { background: var(--primary); }
 .conn-bar.syncing { background: #d97706; }
 .conn-bar .dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -56,11 +71,16 @@ body.has-conn-bar .screen { padding-top: 28px; }
 .header {
   background: #fff;
   border-bottom: 1px solid #e5e5e5;
-  padding: 16px 28px;
+  padding: 20px 32px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 22px;
   flex-shrink: 0;
+}
+.header h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 .header-center {
   flex: 1;
@@ -83,37 +103,60 @@ body.has-conn-bar .screen { padding-top: 28px; }
   background: #fff;
   border: 1px solid #d0d0d0;
   color: #2c2c2c;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 10px 20px;
-  border-radius: 6px;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   letter-spacing: 0.5px;
 }
 .btn-back:active { background: #f2f2f2; }
 
-/* ── Card Grid ── */
-.card-grid {
+/* ── Group screen sections ── */
+.group-screen-body {
   flex: 1;
   overflow-y: auto;
-  padding: 28px;
-  padding-right: 260px;
-  display: grid;
-  gap: 14px;
-  align-content: start;
+  padding: 32px 260px 48px 32px;
   -webkit-overflow-scrolling: touch;
 }
+.section-heading {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #666;
+  margin: 14px 0 18px;
+  padding-left: 4px;
+}
+.section-heading + .section-heading,
+.card-grid + .section-heading { margin-top: 36px; }
+
+/* ── Card Grid ── */
+.card-grid {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+/* 受付トップ画面 */
 .card-grid.groups { grid-template-columns: repeat(3, 1fr); }
-.card-grid.clubs  { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.card-grid.roles  { grid-template-columns: repeat(2, 1fr); }
+/* クラブ画面 */
+.card-grid.clubs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+  padding-right: 260px;
+  grid-template-columns: repeat(3, 1fr);
+  -webkit-overflow-scrolling: touch;
+}
 
 /* ── Cards ── */
 .card {
   position: relative;
-  border-radius: 8px;
-  padding: 32px 20px;
+  border-radius: 12px;
+  padding: 44px 20px;
   text-align: center;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 700;
   cursor: pointer;
   user-select: none;
@@ -122,9 +165,10 @@ body.has-conn-bar .screen { padding-top: 28px; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 110px;
+  min-height: 150px;
   overflow: hidden;
   letter-spacing: 1px;
+  line-height: 1.3;
 }
 .card:active { transform: scale(0.97); }
 
@@ -133,12 +177,27 @@ body.has-conn-bar .screen { padding-top: 28px; }
   border: 1px solid #e0e0e0;
   color: #2c2c2c;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-  border-left: 4px solid #c8102e;
+  border-left: 6px solid var(--primary);
+  min-height: 180px;
 }
 .card.group:active {
-  box-shadow: 0 2px 12px rgba(200,16,46,0.10);
-  border-color: #e0e0e0;
-  border-left-color: #c8102e;
+  box-shadow: 0 2px 12px var(--primary-shadow);
+}
+
+/* 役職カード: 金色アクセント (左ボーダー + 文字色) でグループカードと区別 */
+.card.role-tag {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  color: #6b4d00;
+  box-shadow: 0 1px 4px rgba(184, 134, 11, 0.08);
+  border-left: 6px solid #d4af37;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.4;
+  min-height: 130px;
+}
+.card.role-tag:active {
+  box-shadow: 0 2px 12px rgba(184, 134, 11, 0.25);
 }
 
 .card.club {
@@ -146,10 +205,13 @@ body.has-conn-bar .screen { padding-top: 28px; }
   border: 1px solid #e0e0e0;
   color: #2c2c2c;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  min-height: 120px;
+  font-size: 24px;
+  padding: 36px 20px;
 }
 .card.club:active {
   box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-  border-color: #c8102e;
+  border-color: var(--primary);
 }
 
 /* ── Member screen ── */
@@ -161,21 +223,21 @@ body.has-conn-bar .screen { padding-top: 28px; }
 }
 
 .section-label {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 2px;
-  margin: 20px 0 10px;
-  padding: 8px 12px;
-  border-radius: 4px;
+  margin: 24px 0 14px;
+  padding: 10px 16px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   text-transform: uppercase;
 }
 .section-label.unattended {
   background: #fff5f5;
-  border-left: 3px solid #c8102e;
-  color: #c8102e;
+  border-left: 3px solid var(--primary);
+  color: var(--primary);
 }
 .section-label.attended {
   background: #f0f9f4;
@@ -188,60 +250,134 @@ body.has-conn-bar .screen { padding-top: 28px; }
   border-radius: 50%;
   animation: blink 1.8s ease-in-out infinite;
 }
-.section-label.unattended .dot { background: #c8102e; }
+.section-label.unattended .dot { background: var(--primary); }
 .section-label.attended .dot { background: #2e7d32; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
 .member-grid {
   display: grid;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 24px;
 }
-.member-grid.large { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.member-grid.small { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.member-grid.large { grid-template-columns: repeat(4, 1fr); }
+.member-grid.small { grid-template-columns: repeat(5, 1fr); }
 
 .member-card {
   position: relative;
   background: #fff;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 20px 12px;
+  border-radius: 12px;
+  padding: 30px 12px 26px;
   text-align: center;
-  font-size: 20px;
-  font-weight: 500;
   cursor: pointer;
   transition: all 0.12s;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   color: #2c2c2c;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
 }
 .member-card:active { transform: scale(0.96); }
-.member-card.selected {
-  background: #c8102e;
-  border-color: #c8102e;
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(200,16,46,0.20);
+.member-card .member-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1.25;
 }
+.member-card .member-kana {
+  font-size: 14px;
+  font-weight: 400;
+  color: #888;
+  letter-spacing: 0.5px;
+}
+.member-card .member-role {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.member-card.selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 12px var(--primary-shadow);
+}
+.member-card.selected .member-name { color: #fff; }
+.member-card.selected .member-kana { color: rgba(255,255,255,0.7); }
+.member-card.selected .member-role { color: rgba(255,255,255,0.9); }
 .member-card.selected::after {
   content: '✓';
   position: absolute;
-  top: 4px;
-  right: 8px;
-  font-size: 12px;
-  color: rgba(255,255,255,0.6);
+  top: 6px;
+  right: 10px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.75);
+  font-weight: 700;
 }
 
 .member-card.small-card {
-  padding: 10px 8px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 16px 10px;
   background: #f8faf8;
   border-color: #c8e6c9;
+  min-height: 80px;
+}
+.member-card.small-card .member-name {
+  font-size: 18px;
+  font-weight: 600;
   color: #2e7d32;
+}
+.member-card.small-card .member-kana {
+  font-size: 12px;
+  color: #4a9c52;
 }
 .member-card.small-card.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 控え室案内 (受付完了画面) */
+.lounge-notice {
+  margin-top: 20px;
+  background: linear-gradient(135deg, #fffaf0 0%, #fdf5dc 100%);
+  border: 2px solid #d4af37;
+  border-radius: 16px;
+  padding: 20px 28px;
+  text-align: center;
+  max-width: 520px;
+  box-shadow: 0 4px 24px rgba(184, 134, 11, 0.20);
+  animation: doneIn 0.7s ease-out;
+}
+.lounge-notice .lounge-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #fff;
+  background: #b8860b;
+  padding: 4px 14px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+.lounge-notice .lounge-msg {
+  font-size: 17px;
+  font-weight: 700;
+  color: #6b4d00;
+  line-height: 1.6;
+}
+.lounge-notice .lounge-targets {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b6508;
+  letter-spacing: 0.5px;
+}
+#lounge-notices .lounge-notice + .lounge-notice {
+  margin-top: 12px;
 }
 
 /* ── Bottom register bar ── */
@@ -262,25 +398,25 @@ body.has-conn-bar .screen { padding-top: 28px; }
   gap: 20px;
 }
 .register-count {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
-  color: #c8102e;
+  color: var(--primary);
   white-space: nowrap;
 }
-.register-count span { font-size: 22px; }
+.register-count span { font-size: 26px; }
 
 .btn-confirm {
   flex: 1;
-  background: #c8102e;
+  background: var(--primary);
   color: #fff;
   border: none;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
-  padding: 18px 24px;
-  border-radius: 8px;
+  padding: 22px 28px;
+  border-radius: 10px;
   cursor: pointer;
   letter-spacing: 2px;
-  box-shadow: 0 2px 8px rgba(200,16,46,0.18);
+  box-shadow: 0 2px 8px var(--primary-shadow);
   transition: all 0.12s;
 }
 .btn-confirm:disabled {
@@ -291,8 +427,8 @@ body.has-conn-bar .screen { padding-top: 28px; }
 }
 .btn-confirm:not(:disabled):active {
   transform: scale(0.98);
-  background: #a00d24;
-  box-shadow: 0 2px 16px rgba(200,16,46,0.30);
+  background: var(--primary-dark);
+  box-shadow: 0 2px 16px var(--primary-shadow);
 }
 
 /* ── Modal ── */
@@ -327,7 +463,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
   margin-bottom: 24px;
   color: #2c2c2c;
   padding-bottom: 16px;
-  border-bottom: 2px solid #c8102e;
+  border-bottom: 2px solid var(--primary);
 }
 .modal-list {
   list-style: none;
@@ -363,7 +499,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
 .btn-modal-cancel:active { background: #f5f5f5; }
 .btn-modal-register {
   flex: 1;
-  background: #c8102e;
+  background: var(--primary);
   color: #fff;
   border: none;
   font-size: 18px;
@@ -372,16 +508,16 @@ body.has-conn-bar .screen { padding-top: 28px; }
   border-radius: 8px;
   cursor: pointer;
   letter-spacing: 1px;
-  box-shadow: 0 2px 8px rgba(200,16,46,0.18);
+  box-shadow: 0 2px 8px var(--primary-shadow);
 }
 .btn-modal-register:active {
-  background: #a00d24;
-  box-shadow: 0 2px 16px rgba(200,16,46,0.30);
+  background: var(--primary-dark);
+  box-shadow: 0 2px 16px var(--primary-shadow);
 }
 .modal-warn {
   background: #fff5f5;
   border: 1px solid #fecaca;
-  color: #c8102e;
+  color: var(--primary);
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
@@ -392,7 +528,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
 .modal-item.dup {
   background: #fff5f5;
   border-color: #fecaca;
-  color: #c8102e;
+  color: var(--primary);
   font-size: 16px;
 }
 .modal-item .ts {
@@ -402,7 +538,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
   color: #999;
   font-weight: 400;
 }
-.modal-item.dup .ts { color: #c8102e; opacity: 0.7; }
+.modal-item.dup .ts { color: var(--primary); opacity: 0.7; }
 
 /* ── Toast ── */
 .toast {
@@ -430,7 +566,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-.toast.warn { background: rgba(200,16,46,0.94); }
+.toast.warn { background: var(--primary-shadow); }
 
 /* ── Done screen warn ── */
 .done-warn {
@@ -439,7 +575,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
   background: #fff5f5;
   border: 1px solid #fecaca;
   border-radius: 8px;
-  color: #c8102e;
+  color: var(--primary);
   font-size: 13px;
   font-weight: 500;
   max-width: 480px;
@@ -549,7 +685,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
 }
 .btn-home {
   margin-top: 12px;
-  background: #c8102e;
+  background: var(--primary);
   color: #fff;
   border: none;
   font-size: 16px;
@@ -558,9 +694,9 @@ body.has-conn-bar .screen { padding-top: 28px; }
   border-radius: 8px;
   cursor: pointer;
   letter-spacing: 2px;
-  box-shadow: 0 2px 8px rgba(200,16,46,0.18);
+  box-shadow: 0 2px 8px var(--primary-shadow);
 }
-.btn-home:active { background: #a00d24; }
+.btn-home:active { background: var(--primary-dark); }
 
 /* ── Mascot ── */
 .mascot {
@@ -659,7 +795,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
 .splash-spinner {
   width: 36px; height: 36px;
   border: 3px solid #f0f0f0;
-  border-top-color: #c8102e;
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -691,7 +827,12 @@ body.has-conn-bar .screen { padding-top: 28px; }
       <img src="/logo-rotary-district2700.png" alt="Rotary District 2700">
     </div>
   </div>
-  <div id="group-grid" class="card-grid groups"></div>
+  <div class="group-screen-body">
+    <div class="section-heading">所属クラブから受付</div>
+    <div id="group-grid" class="card-grid groups"></div>
+    <div class="section-heading">ガバナー補佐と2026-27年度 地区委員長の方はこちらから</div>
+    <div id="role-grid" class="card-grid roles"></div>
+  </div>
 </div>
 
 <!-- Screen 2: Club Selection -->
@@ -706,7 +847,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
 <!-- Screen 3: Member Selection -->
 <div id="screen-members" class="screen">
   <div class="header">
-    <button class="btn-back" onclick="showScreen('clubs')">← 戻る</button>
+    <button class="btn-back" onclick="backFromMembers()">← 戻る</button>
     <h1><span id="member-title">名前選択</span></h1>
   </div>
   <div class="member-area" id="member-area" style="padding-bottom: 160px;"></div>
@@ -723,6 +864,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
     <div class="done-msg">登録完了</div>
     <div class="done-detail" id="done-detail"></div>
     <div class="done-warn" id="done-warn" style="display:none;"></div>
+    <div id="lounge-notices"></div>
     <button class="btn-home" onclick="showScreen('groups')">トップへ戻る</button>
   </div>
   <div class="done-mascot">
@@ -796,40 +938,81 @@ function updateMascot(screen) {
   }
 }
 
+// 受付モード: 'group' = グループ→クラブ→メンバー, 'tag' = タグ→メンバー
 let currentScreen = 'groups';
+let currentMode = 'group';
 let currentGroupId = null;
 let currentGroupName = '';
 let currentClubId = null;
 let currentClubName = '';
+let currentTag = null;       // 大タグ名 (タグモード時)
+let currentTagLabel = '';    // 画面表示用ラベル
 let selectedIds = new Set();
 let cancelTargetId = null;
+
+// 役職タグカードの定義 (内部タグ名 → 表示ラベル)
+const ROLE_TAGS = [
+  { tag: '2026-27年度・ガバナー補佐', label: '2026-27年度<br>ガバナー補佐' },
+  { tag: '協議会主導・委員長',         label: '2026-27年度<br>地区委員長' },
+];
 
 function showScreen(name) {
   currentScreen = name;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
-  if (name === 'groups') { renderGroups(); selectedIds.clear(); }
+  if (name === 'groups') {
+    renderGroups();
+    selectedIds.clear();
+    setGoldTheme(false); // トップに戻ったらテーマリセット
+  }
   if (name === 'clubs')  { renderClubs(); }
   if (name === 'members'){ renderMembers(); }
   updateMascot(name);
 }
 
+function setGoldTheme(on) {
+  if (on) document.body.classList.add('theme-gold');
+  else    document.body.classList.remove('theme-gold');
+}
+
 function renderGroups() {
-  const groups = RA.getGroups();
-  const grid = document.getElementById('group-grid');
-  grid.innerHTML = groups.map(g =>
+  // グループは 1-7 のみ (8 = ガバナー事務所 は非表示)
+  const groups = RA.getGroups().filter(g => g.id <= 7);
+  const groupGrid = document.getElementById('group-grid');
+  groupGrid.innerHTML = groups.map(g =>
     `<div class="card group" data-id="${g.id}" data-name="${esc(g.name)}">${esc(g.name)}</div>`
   ).join('');
-  for (const el of grid.querySelectorAll('.card.group')) {
+  for (const el of groupGrid.querySelectorAll('.card.group')) {
     el.addEventListener('click', () => selectGroup(Number(el.dataset.id), el.dataset.name));
+  }
+
+  // 役職タグカード (ホーム画面では金色にしない。グループカードと同じスタイル)
+  const roleGrid = document.getElementById('role-grid');
+  roleGrid.innerHTML = ROLE_TAGS.map(rt => {
+    return `<div class="card role-tag" data-tag="${esc(rt.tag)}" data-label="${esc(rt.label.replace(/<br>/g, ' / '))}">${rt.label}</div>`;
+  }).join('');
+  for (const el of roleGrid.querySelectorAll('.card.role-tag')) {
+    el.addEventListener('click', () => selectTag(el.dataset.tag, el.dataset.label));
   }
 }
 
 function selectGroup(id, name) {
+  currentMode = 'group';
   currentGroupId = id;
   currentGroupName = name;
+  setGoldTheme(false);
   document.getElementById('club-title').textContent = name;
   showScreen('clubs');
+}
+
+function selectTag(tag, label) {
+  currentMode = 'tag';
+  currentTag = tag;
+  currentTagLabel = label;
+  selectedIds.clear();
+  setGoldTheme(true);
+  document.getElementById('member-title').textContent = label;
+  showScreen('members');
 }
 
 function renderClubs() {
@@ -845,6 +1028,7 @@ function renderClubs() {
 }
 
 function selectClub(id, name) {
+  currentMode = 'group';
   currentClubId = id;
   currentClubName = name;
   selectedIds.clear();
@@ -852,9 +1036,37 @@ function selectClub(id, name) {
   showScreen('members');
 }
 
+// メンバー画面の戻るボタン: モードに応じて遷移先を切り替え
+function backFromMembers() {
+  if (currentMode === 'tag') showScreen('groups');
+  else                       showScreen('clubs');
+}
+
+function getCurrentMembers() {
+  if (currentMode === 'tag') return RA.getMembersByTag(currentTag);
+  return RA.getMembersByClub(currentClubId);
+}
+
+function memberCardHTML(m, opts = {}) {
+  const sel = opts.selected ? ' selected' : '';
+  const small = opts.small ? ' small-card' : '';
+  const disabled = opts.disabled ? ' disabled' : '';
+  const role = m.role ? `<div class="member-role">${esc(m.role)}</div>` : '';
+  return `<div class="member-card${small}${sel}${disabled}" data-id="${m.id}">
+    <div class="member-name">${esc(m.name)}</div>
+    ${m.name_kana ? `<div class="member-kana">${esc(m.name_kana)}</div>` : ''}
+    ${role}
+  </div>`;
+}
+
 function renderMembers() {
-  if (!currentClubId) return;
-  const members = RA.getMembersByClub(currentClubId);
+  const members = getCurrentMembers();
+  // ふりがな順にソート (空のかなは末尾)
+  members.sort((a, b) => {
+    const ka = a.name_kana || 'んん';
+    const kb = b.name_kana || 'んん';
+    return ka.localeCompare(kb, 'ja');
+  });
   const unattended = members.filter(m => !m.attended);
   const attended = members.filter(m => m.attended);
   const area = document.getElementById('member-area');
@@ -864,8 +1076,7 @@ function renderMembers() {
   html += `<div class="section-label unattended"><span class="dot"></span>未出席 ${unattended.length}名</div>`;
   html += '<div class="member-grid large">';
   for (const m of unattended) {
-    const sel = selectedIds.has(m.id) ? ' selected' : '';
-    html += `<div class="member-card${sel}" onclick="toggleMember(${m.id})">${esc(m.name)}</div>`;
+    html += memberCardHTML(m, { selected: selectedIds.has(m.id) });
   }
   if (!unattended.length) html += '<div style="padding:24px;color:#aaa;text-align:center;">全員出席済み</div>';
   html += '</div>';
@@ -873,14 +1084,21 @@ function renderMembers() {
   html += `<div class="section-label attended"><span class="dot"></span>出席済み ${attended.length}名</div>`;
   html += '<div class="member-grid small">';
   for (const m of attended) {
-    const cls = isOnline ? '' : ' disabled';
-    const handler = isOnline ? `onclick="askCancel(${m.id})"` : '';
-    html += `<div class="member-card small-card${cls}" ${handler}>${esc(m.name)}</div>`;
+    html += memberCardHTML(m, { small: true, disabled: !isOnline });
   }
   if (!attended.length) html += '<div style="padding:12px;color:#ccc;text-align:center;">---</div>';
   html += '</div>';
 
   area.innerHTML = html;
+
+  // クリックハンドラ (大きいカード = 選択、小さいカード = キャンセル)
+  for (const el of area.querySelectorAll('.member-grid.large .member-card')) {
+    el.addEventListener('click', () => toggleMember(Number(el.dataset.id)));
+  }
+  for (const el of area.querySelectorAll('.member-grid.small .member-card:not(.disabled)')) {
+    el.addEventListener('click', () => askCancel(Number(el.dataset.id)));
+  }
+
   updateSelectionCount();
 }
 
@@ -900,7 +1118,7 @@ function updateSelectionCount() {
 }
 
 function showConfirmModal() {
-  const members = RA.getMembersByClub(currentClubId);
+  const members = getCurrentMembers();
   const selected = members.filter(m => selectedIds.has(m.id));
   const dups = selected.filter(m => m.attended);
 
@@ -929,14 +1147,18 @@ function registerAttendance() {
   hideConfirmModal();
   const ids = Array.from(selectedIds);
   if (ids.length === 0) return;
-  const members = RA.getMembersByClub(currentClubId);
+  const members = getCurrentMembers();
   const selected = members.filter(m => selectedIds.has(m.id));
   const newOnes = selected.filter(m => !m.attended);
   const dups = selected.filter(m => m.attended);
 
+  // 自分自身の楽観的更新 → 'snapshot' イベントで pruneSelectionFromSnapshot が誤発火しないよう、
+  // enqueueAttend より先に selectedIds をクリアしておく
+  selectedIds.clear();
+
   RA.enqueueAttend(ids); // 楽観的更新 + バックグラウンド送信
 
-  // done 画面に表示する内訳
+  // done 画面の表示
   const detail = document.getElementById('done-detail');
   const warn = document.getElementById('done-warn');
   if (newOnes.length > 0) {
@@ -952,8 +1174,56 @@ function registerAttendance() {
     warn.style.display = 'none';
   }
 
-  selectedIds.clear();
+  // 控え室案内 (lounge 設定にマッチする人がいれば表示)
+  showLoungeNoticeIfApplicable(selected);
+
   showScreen('done');
+}
+
+function showLoungeNoticeIfApplicable(selected) {
+  const container = document.getElementById('lounge-notices');
+  container.innerHTML = '';
+  const lounge = (RA.getSettings() || {}).lounge;
+  if (!lounge || lounge.enabled === false) return;
+
+  const tags = lounge.tags || {};
+  const members = lounge.members || {};
+
+  // メッセージ → { names: Set, tag?: string } の map で集約
+  const byMsg = new Map();
+  function addMatch(name, message, tag) {
+    const m = (message || '').trim();
+    if (!m) return;
+    if (!byMsg.has(m)) byMsg.set(m, { names: [], tag });
+    if (!byMsg.get(m).names.includes(name)) byMsg.get(m).names.push(name);
+  }
+
+  for (const m of selected) {
+    // 個別メンバー指定が最優先
+    const memCfg = members[String(m.id)];
+    if (memCfg && memCfg.message) {
+      addMatch(m.name, memCfg.message);
+      continue;
+    }
+    // 大タグ
+    const tagCfg = m.tag && tags[m.tag];
+    if (tagCfg && tagCfg.message) {
+      addMatch(m.name, tagCfg.message, m.tag);
+    }
+  }
+
+  if (byMsg.size === 0) return;
+
+  for (const [msg, info] of byMsg) {
+    const div = document.createElement('div');
+    div.className = 'lounge-notice';
+    div.innerHTML = `
+      <span class="lounge-label">控え室のご案内${info.tag ? ' / ' + esc(info.tag) : ''}</span>
+      <div class="lounge-msg">${esc(msg)}</div>
+      <div class="lounge-targets">${esc(info.names.join('、'))} さん</div>
+    `;
+    container.appendChild(div);
+  }
 }
 
 function askCancel(id) {
@@ -1027,10 +1297,15 @@ function showToast(message, opts = {}) {
 // SSE 同期時の自動プルーン: 別端末で先に登録された人を選択から外す
 function pruneSelectionFromSnapshot() {
   if (currentScreen !== 'members' || selectedIds.size === 0) return;
-  const members = RA.getMembersByClub(currentClubId);
+  // 自端末の送信キューに入っているIDは「自分が登録した」のでプルーン対象外
+  const ownPending = new Set();
+  for (const q of RA.getQueue()) {
+    if (q.type === 'attend') for (const id of q.memberIds) ownPending.add(id);
+  }
+  const members = getCurrentMembers();
   const removed = [];
   for (const m of members) {
-    if (selectedIds.has(m.id) && m.attended) {
+    if (selectedIds.has(m.id) && m.attended && !ownPending.has(m.id)) {
       selectedIds.delete(m.id);
       removed.push(m);
     }

@@ -306,6 +306,13 @@ window.RA = (function () {
     if (!snapshot) return null;
     return snapshot.members.find((m) => m.id === id) || null;
   }
+  function getMembersByTag(tag) {
+    if (!snapshot) return [];
+    return snapshot.members.filter((m) => m.tag === tag);
+  }
+  function getSettings() {
+    return (snapshot && snapshot.settings) || {};
+  }
 
   return {
     init,
@@ -322,5 +329,7 @@ window.RA = (function () {
     getClubsByGroup,
     getMembersByClub,
     getMember,
+    getMembersByTag,
+    getSettings,
   };
 })();

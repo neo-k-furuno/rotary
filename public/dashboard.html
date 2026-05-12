@@ -258,6 +258,141 @@ body::before {
   font-size: 13px;
 }
 
+/* ── Group attendance cards (リアルタイム) ── */
+.group-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 20px 28px;
+}
+.group-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.04);
+  transition: all 0.2s;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.group-card:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99, 102, 241, 0.10); }
+.group-card:active { transform: scale(0.97); }
+/* 役職カード (ガバナー補佐/地区委員長) のアクセント */
+.group-card.role-card .gc-name { color: #b8860b; letter-spacing: 1px; }
+.group-card.role-card { border-left: 4px solid #d4af37; }
+.group-card.active-card {
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+}
+.group-card.role-card.active-card { border-color: #d4af37; box-shadow: 0 4px 20px rgba(184, 134, 11, 0.30); }
+.group-card .gc-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.group-card .gc-count {
+  font-size: 28px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+}
+.group-card .gc-total {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.group-card .gc-pct {
+  font-size: 11px;
+  color: #94a3b8;
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-weight: 700;
+}
+.group-card .gc-bar {
+  margin-top: 10px;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.group-card .gc-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* ── Role tag list (ガバナー補佐 + 地区委員長) ── */
+.role-section {
+  margin: 0 28px 20px;
+}
+.role-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.role-section-head h3 {
+  font-size: 14px;
+  font-weight: 900;
+  color: #b8860b;
+  letter-spacing: 2px;
+}
+.role-section-head .role-count {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.role-item {
+  background: linear-gradient(135deg, #fffaf0 0%, #fdf5dc 100%);
+  border: 1px solid #e8d493;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s;
+}
+.role-item.attended {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+.role-item .role-status {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #d4af37; flex-shrink: 0;
+}
+.role-item.attended .role-status { background: #16a34a; }
+.role-item .role-body { min-width: 0; flex: 1; }
+.role-item .role-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.role-item .role-club {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-top: 1px;
+}
+.role-item .role-ts {
+  font-size: 10px;
+  color: #16a34a;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
 /* ── Group breakdown ── */
 .breakdown { min-width: 0; }
 .group-section { margin-bottom: 20px; }
@@ -437,24 +572,53 @@ summary:hover { background: #f8fafc; border-color: #c7d2fe; }
     max-height: 360px;
     order: -1; /* タイムラインを上に */
   }
+  .group-cards { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); margin: 16px 20px; }
+  .role-section { margin: 0 20px 16px; }
+  .role-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .toolbar { top: 60px; }
+  .group-tabs { top: 104px; }
 }
 
 /* ── Smartphone ── */
 @media (max-width: 720px) {
-  .header { padding: 10px 14px; gap: 10px; }
-  .header h1 { font-size: 15px; letter-spacing: 1px; }
-  .header-stats { gap: 6px; }
-  .stat-box { padding: 6px 8px; min-width: 60px; }
-  .stat-num { font-size: 20px; }
-  .stat-label { font-size: 9px; letter-spacing: 1px; }
+  .header { padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
+  .header h1 { font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
+  .header-stats { width: 100%; gap: 6px; justify-content: space-between; }
+  .stat-box { flex: 1; padding: 6px 8px; min-width: 0; }
+  .stat-num { font-size: 22px; }
+  .stat-label { font-size: 10px; letter-spacing: 1px; }
 
-  .toolbar { padding: 8px 14px; top: 56px; }
+  .toolbar { padding: 8px 14px; top: 92px; gap: 6px; }
   .toolbar button, .toolbar a { padding: 5px 10px; font-size: 11px; }
   .conn-pill { padding: 3px 9px; font-size: 10px; }
   .last-sync { display: none; }
 
-  .group-tabs { padding: 8px 14px; top: 92px; }
-  .group-tab { padding: 5px 12px; font-size: 11px; }
+  /* スマホでは「上部のグループタブ」は不要 (カード自体がナビゲーション) */
+  .group-tabs { display: none; }
+
+  /* グループ別出席カード: スマホは2列 */
+  .group-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin: 14px;
+  }
+  .group-card { padding: 10px 12px; border-radius: 10px; }
+  .group-card .gc-name { font-size: 11px; margin-bottom: 4px; }
+  .group-card .gc-count { font-size: 22px; }
+  .group-card .gc-total { font-size: 11px; }
+  .group-card .gc-pct { font-size: 10px; top: 10px; right: 10px; }
+  .group-card .gc-bar { margin-top: 6px; height: 3px; }
+
+  /* スマホでは詳細リストはデフォルト非表示。カードタップで .active-mobile を付与して展開 */
+  .role-section { display: none; margin: 0 14px 14px; }
+  .role-section.active-mobile { display: block; }
+  .role-section-head h3 { font-size: 12px; letter-spacing: 1px; }
+  .role-section-head .role-count { font-size: 10px; }
+  .role-grid { grid-template-columns: 1fr; gap: 6px; }
+  .role-item { padding: 8px 12px; border-radius: 8px; }
+  .role-item .role-name { font-size: 12px; }
+  .role-item .role-club { font-size: 10px; }
+  .role-item .role-ts { font-size: 9px; }
 
   .main { padding: 14px; gap: 14px; }
   .timeline { max-height: 320px; border-radius: 12px; top: 0; }
@@ -463,15 +627,28 @@ summary:hover { background: #f8fafc; border-color: #c7d2fe; }
   .timeline-item { padding: 8px 14px; grid-template-columns: 50px 1fr; gap: 10px; }
   .timeline-time { font-size: 12px; }
   .timeline-name { font-size: 13px; }
+  .timeline-club { font-size: 10px; }
+
+  /* スマホでは breakdown 内の全グループも非表示 → 選択中のみ表示 */
+  .breakdown .group-section { display: none; }
+  .breakdown .group-section.active-mobile { display: block; }
 
   .group-section { margin-bottom: 16px; }
-  .group-title { font-size: 13px; padding: 10px 14px; gap: 10px; }
+  .group-title { font-size: 13px; padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
   .group-title .group-stats { font-size: 11px; }
-  .progress-bar { width: 70px; }
-  summary { font-size: 12px; padding: 8px 12px; gap: 8px; }
+  .progress-bar { width: 60px; }
+  summary { font-size: 12px; padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
   .progress-text { font-size: 11px; }
   .club-table th, .club-table td { padding: 5px 8px; font-size: 11px; }
   .badge { font-size: 9px; padding: 1px 7px; }
+}
+
+/* ── Very small (狭いスマホ) ── */
+@media (max-width: 380px) {
+  .header h1 { display: none; }  /* 統計だけ見せる */
+  .header-stats { width: 100%; }
+  .toolbar { top: 64px; }
+  .group-tabs { top: 106px; }
 }
 </style>
 </head>
@@ -505,6 +682,25 @@ summary:hover { background: #f8fafc; border-color: #c7d2fe; }
 </div>
 
 <div class="group-tabs" id="group-tabs"></div>
+
+<!-- ── グループ別の出席リアルタイムカード ── -->
+<div class="group-cards" id="group-cards"></div>
+
+<!-- ── 役職別の名簿リスト ── -->
+<div class="role-section" data-tag="assistant">
+  <div class="role-section-head">
+    <h3>2026-27年度・ガバナー補佐</h3>
+    <span class="role-count" id="role-count-1"></span>
+  </div>
+  <div class="role-grid" id="role-grid-1"></div>
+</div>
+<div class="role-section" data-tag="chair">
+  <div class="role-section-head">
+    <h3>2026-27年度 地区委員長</h3>
+    <span class="role-count" id="role-count-2"></span>
+  </div>
+  <div class="role-grid" id="role-grid-2"></div>
+</div>
 
 <div class="main">
   <!-- ── Group breakdown ── -->
@@ -581,8 +777,144 @@ function render() {
   document.getElementById('stat-rate').textContent = total > 0 ? Math.round(attended / total * 100) + '%' : '0%';
 
   renderTabs(data);
+  renderGroupCards(data);
+  renderRoleSections(data);
   renderBreakdown(filteredClubs, filteredMembers);
   renderTimeline(filteredMembers);
+  applyActiveCard(); // SSE更新後も「タップ中のカード」を維持
+}
+
+// カード一覧の定義 (順番: ガバナー補佐 → 地区委員長 → 第1〜第7グループ)
+const ROLE_CARDS = [
+  { tag: '2026-27年度・ガバナー補佐', label: 'ガバナー補佐' },
+  { tag: '協議会主導・委員長',         label: '地区委員長' },
+];
+
+function renderGroupCards(data) {
+  const cards = [];
+
+  // 役職カードを先頭に
+  for (const rc of ROLE_CARDS) {
+    const members = data.members.filter(m => m.tag === rc.tag);
+    const total = members.length;
+    const attended = members.filter(m => m.attended).length;
+    cards.push({
+      kind: 'tag',
+      value: rc.tag,
+      label: rc.label,
+      total, attended,
+      isRole: true,
+    });
+  }
+
+  // グループ1-7
+  const groups = {};
+  for (const c of data.clubs) {
+    if (c.group_id > 7) continue;
+    if (!groups[c.group_id]) groups[c.group_id] = { id: c.group_id, name: c.group_name, total: 0, attended: 0 };
+    groups[c.group_id].total += c.total;
+    groups[c.group_id].attended += c.attended;
+  }
+  for (const g of Object.values(groups).sort((a, b) => a.id - b.id)) {
+    cards.push({
+      kind: 'group',
+      value: String(g.id),
+      label: g.name,
+      total: g.total,
+      attended: g.attended,
+      isRole: false,
+    });
+  }
+
+  document.getElementById('group-cards').innerHTML = cards.map(c => {
+    const pct = c.total > 0 ? Math.round(c.attended / c.total * 100) : 0;
+    const roleClass = c.isRole ? ' role-card' : '';
+    return `<div class="group-card${roleClass}" data-kind="${esc(c.kind)}" data-value="${esc(c.value)}">
+      <div class="gc-pct">${pct}%</div>
+      <div class="gc-name">${esc(c.label)}</div>
+      <div><span class="gc-count">${c.attended}</span> <span class="gc-total">/ ${c.total}名</span></div>
+      <div class="gc-bar"><div style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  // カードクリックでスマホでは詳細表示、PC では該当セクションへスクロール
+  for (const el of document.querySelectorAll('.group-card')) {
+    el.addEventListener('click', () => onCardClick(el));
+  }
+}
+
+let activeCardKey = null;
+function onCardClick(el) {
+  const kind = el.dataset.kind;
+  const value = el.dataset.value;
+  const key = kind + ':' + value;
+  const isMobile = window.matchMedia('(max-width: 720px)').matches;
+
+  // active 表示の切替 (同じカード再タップで折りたたみ)
+  if (activeCardKey === key) {
+    activeCardKey = null;
+    document.body.classList.remove('mobile-detail-active');
+  } else {
+    activeCardKey = key;
+    document.body.classList.add('mobile-detail-active');
+  }
+  applyActiveCard();
+
+  // PC ではスクロール、スマホでは表示切替
+  if (!isMobile) {
+    const target = findSectionForCard(kind, value);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function applyActiveCard() {
+  document.querySelectorAll('.group-card.active-card').forEach(el => el.classList.remove('active-card'));
+  document.querySelectorAll('.active-mobile').forEach(el => el.classList.remove('active-mobile'));
+  if (!activeCardKey) return;
+  const [kind, value] = activeCardKey.split(':');
+  const card = document.querySelector(`.group-card[data-kind="${kind}"][data-value="${cssEsc(value)}"]`);
+  if (card) card.classList.add('active-card');
+  const target = findSectionForCard(kind, value);
+  if (target) target.classList.add('active-mobile');
+}
+
+function findSectionForCard(kind, value) {
+  if (kind === 'tag') {
+    if (value === '2026-27年度・ガバナー補佐') return document.querySelector('.role-section[data-tag="assistant"]');
+    if (value === '協議会主導・委員長')         return document.querySelector('.role-section[data-tag="chair"]');
+  } else if (kind === 'group') {
+    return document.querySelector(`.group-section[data-group-id="${value}"]`);
+  }
+  return null;
+}
+
+function cssEsc(v) {
+  // CSS セレクタで安全に使うため簡易エスケープ
+  return String(v).replace(/(["\\])/g, '\\$1');
+}
+
+function renderRoleSections(data) {
+  renderRoleList(data, '2026-27年度・ガバナー補佐', 'role-grid-1', 'role-count-1');
+  renderRoleList(data, '協議会主導・委員長',         'role-grid-2', 'role-count-2');
+}
+
+function renderRoleList(data, tag, gridId, countId) {
+  const items = data.members.filter(m => m.tag === tag)
+    .sort((a, b) => (a.attended_at || 'z').localeCompare(b.attended_at || 'z') || a.name.localeCompare(b.name, 'ja'));
+  const attendedCount = items.filter(m => m.attended).length;
+  document.getElementById(countId).textContent = `${attendedCount} / ${items.length}名 出席`;
+  document.getElementById(gridId).innerHTML = items.map(m => {
+    const cls = m.attended ? ' attended' : '';
+    const ts = m.attended ? formatTime(m.attended_at) : '';
+    return `<div class="role-item${cls}">
+      <span class="role-status"></span>
+      <div class="role-body">
+        <div class="role-name">${esc(m.name)}</div>
+        <div class="role-club">${esc(m.club_name)}</div>
+      </div>
+      ${ts ? `<div class="role-ts">${ts}</div>` : ''}
+    </div>`;
+  }).join('') || '<div style="color:#cbd5e1;font-size:12px;padding:12px;">該当者なし</div>';
 }
 
 function renderTabs(data) {
@@ -633,7 +965,7 @@ function renderBreakdown(clubs, members) {
     const gTotal = group.clubs.reduce((s, c) => s + c.total, 0);
     const gAttended = group.clubs.reduce((s, c) => s + c.attended, 0);
 
-    html += `<div class="group-section">`;
+    html += `<div class="group-section" data-group-id="${group.id}">`;
     html += `<div class="group-title">${esc(group.name)}
       <span class="group-stats">${gAttended} / ${gTotal} (${gTotal > 0 ? Math.round(gAttended/gTotal*100) : 0}%)</span>
     </div>`;

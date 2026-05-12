@@ -49,6 +49,57 @@ if (!memberCols.includes('tag')) {
   db.exec("ALTER TABLE members ADD COLUMN tag TEXT NOT NULL DEFAULT ''");
 }
 
+// 設定保存用テーブル (key-value)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT
+  );
+`);
+
+// 控え室設定の初期値 (なければ作成)
+// 新形式: タグごとに個別メッセージを持つ
+const defaultLounge = {
+  enabled: true,
+  tags: {
+    '2026-27年度・三役':         { message: '' },
+    'ゲスト・講演者':            { message: '' },
+    '2026-27年度・ガバナー補佐': { message: '' },
+    '協議会主導・委員長':        { message: '' },
+    '支援室':                    { message: '' },
+  },
+  members: {}, // { "<member_id>": { message: '...' } }
+};
+const existing = db.prepare("SELECT value FROM settings WHERE key = 'lounge'").get();
+if (!existing) {
+  db.prepare(
+    "INSERT INTO settings (key, value, updated_at) VALUES ('lounge', ?, datetime('now', 'localtime'))"
+  ).run(JSON.stringify(defaultLounge));
+} else {
+  // 旧形式 (tags: array + message: string) を新形式に自動マイグレーション
+  try {
+    const old = JSON.parse(existing.value);
+    if (Array.isArray(old.tags) || typeof old.message === 'string') {
+      const migrated = { enabled: old.enabled !== false, tags: {}, members: {} };
+      // 既存タグ全部にデフォルトの旧 message を入れる
+      for (const t of Object.keys(defaultLounge.tags)) {
+        const wasIncluded = Array.isArray(old.tags) && old.tags.includes(t);
+        migrated.tags[t] = { message: wasIncluded ? (old.message || '') : '' };
+      }
+      // member_ids -> members
+      for (const id of (old.member_ids || [])) {
+        migrated.members[String(id)] = { message: old.message || '' };
+      }
+      db.prepare("UPDATE settings SET value = ?, updated_at = datetime('now', 'localtime') WHERE key = 'lounge'")
+        .run(JSON.stringify(migrated));
+      console.log('lounge設定を新形式 (タグごとメッセージ) に移行しました');
+    }
+  } catch (e) {
+    console.error('lounge設定マイグレーション失敗:', e.message);
+  }
+}
+
 // --- SSE for real-time updates ---
 const sseClients = new Set();
 
@@ -82,6 +133,37 @@ app.get('/api/groups', (req, res) => {
 // --- API: Clubs by group ---
 app.get('/api/groups/:groupId/clubs', (req, res) => {
   const rows = db.prepare('SELECT id, name FROM clubs WHERE group_id = ? ORDER BY name').all(req.params.groupId);
+  res.json(rows);
+});
+
+// --- API: Settings (key-value) ---
+app.get('/api/settings/:key', (req, res) => {
+  const row = db.prepare('SELECT value, updated_at FROM settings WHERE key = ?').get(req.params.key);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  try {
+    res.json({ value: JSON.parse(row.value), updated_at: row.updated_at });
+  } catch (e) {
+    res.json({ value: row.value, updated_at: row.updated_at });
+  }
+});
+
+app.put('/api/settings/:key', (req, res) => {
+  const value = req.body && req.body.value;
+  if (value === undefined) return res.status(400).json({ error: 'value required' });
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  db.prepare(
+    "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now', 'localtime'))" +
+    " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+  ).run(req.params.key, serialized);
+  broadcast({ type: 'settings_update', key: req.params.key });
+  res.json({ ok: true });
+});
+
+// --- API: Members by tag (大タグでの一括取得) ---
+app.get('/api/tags/:tag/members', (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, name, name_kana, role, tag, attended FROM members WHERE tag = ? ORDER BY name_kana, name'
+  ).all(req.params.tag);
   res.json(rows);
 });
 
@@ -147,7 +229,13 @@ app.get('/api/snapshot', (req, res) => {
   const members = db.prepare(
     'SELECT id, club_id, name, name_kana, role, tag, attended, attended_at FROM members ORDER BY club_id, name_kana, name'
   ).all();
-  res.json({ groups, clubs, members, server_ts: nowLocal() });
+  const settingsRows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = {};
+  for (const r of settingsRows) {
+    try { settings[r.key] = JSON.parse(r.value); }
+    catch (e) { settings[r.key] = r.value; }
+  }
+  res.json({ groups, clubs, members, settings, server_ts: nowLocal() });
 });
 
 // --- API: Ping (接続テスト用) ---

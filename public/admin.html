@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理画面 - ロータリー出欠管理</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;900&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Noto Sans JP', -apple-system, sans-serif;
+  background: #f4f6fb;
+  color: #1e293b;
+  min-height: 100vh;
+  padding: 24px;
+}
+.container { max-width: 880px; margin: 0 auto; }
+h1 {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+.subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+.nav { margin-bottom: 20px; display: flex; gap: 8px; }
+.nav a {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #6366f1;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+.nav a:hover { background: #f1f5f9; }
+
+.card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 22px 26px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.04);
+}
+.card h2 {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #4338ca;
+  margin-bottom: 14px;
+}
+.card h2 .badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #fdf5dc;
+  color: #b8860b;
+  margin-left: 8px;
+  letter-spacing: 1px;
+}
+.card p.hint { font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.6; }
+
+label.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+label.toggle input[type="checkbox"] {
+  width: 36px; height: 20px;
+  appearance: none;
+  background: #cbd5e1;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: 0.2s;
+}
+label.toggle input[type="checkbox"]:checked { background: #6366f1; }
+label.toggle input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  background: white;
+  border-radius: 50%;
+  top: 2px; left: 2px;
+  transition: 0.2s;
+}
+label.toggle input[type="checkbox"]:checked::before { left: 18px; }
+
+textarea, input[type="text"] {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1e293b;
+  background: #fafbff;
+  resize: vertical;
+  line-height: 1.5;
+}
+textarea { min-height: 60px; }
+textarea:focus, input[type="text"]:focus { outline: none; border-color: #6366f1; background: white; }
+
+/* タグごとのエディタ */
+.tag-editor {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: #fafbff;
+  transition: all 0.2s;
+}
+.tag-editor.has-message {
+  background: linear-gradient(135deg, #fffaf0 0%, #fdf5dc 100%);
+  border-color: #d4af37;
+}
+.tag-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.tag-editor-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.tag-editor-count {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.tag-editor-clear {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tag-editor-clear:hover { background: #f1f5f9; color: #1e293b; }
+
+/* 個別メンバー */
+.member-editor {
+  border: 1px solid #d4af37;
+  background: linear-gradient(135deg, #fffaf0 0%, #fdf5dc 100%);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.member-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.member-editor-name { font-size: 14px; font-weight: 700; color: #6b4d00; }
+.member-editor-club { font-size: 11px; color: #94a3b8; font-weight: 500; }
+.member-editor-remove {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #d4af37;
+  color: #b8860b;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.search-box { position: relative; margin-bottom: 12px; }
+.search-results {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fafbff;
+}
+.search-row {
+  padding: 9px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.search-row:hover { background: #f1f5f9; }
+.search-row.added { background: #fdf5dc; color: #6b4d00; }
+.search-row .meta { color: #94a3b8; font-size: 11px; margin-left: auto; }
+
+.actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+.btn-save {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.btn-save:active { transform: scale(0.98); }
+.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #16a34a;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.30);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.toast.show { opacity: 1; }
+.toast.error { background: #dc2626; box-shadow: 0 4px 16px rgba(220, 38, 38, 0.30); }
+
+.sticky-save {
+  position: sticky;
+  bottom: 0;
+  background: rgba(244, 246, 251, 0.95);
+  backdrop-filter: blur(12px);
+  margin: -8px -26px 0;
+  padding: 16px 26px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  z-index: 10;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>ROTARY ADMIN</h1>
+  <p class="subtitle">控え室案内のメッセージをタグごと・個別に設定</p>
+
+  <div class="nav">
+    <a href="/dashboard.html">← ダッシュボードへ</a>
+    <a href="/">iPad受付画面へ</a>
+  </div>
+
+  <!-- 有効化 -->
+  <div class="card">
+    <h2>控え室案内 全体スイッチ <span class="badge" id="badge-status">未読込</span></h2>
+    <label class="toggle">
+      <input type="checkbox" id="enabled">
+      <span>受付完了時に控え室案内を表示する</span>
+    </label>
+    <p class="hint" style="margin-top:8px;">OFFにすると、以下の設定があっても表示されません。</p>
+  </div>
+
+  <!-- 大タグごとのメッセージ -->
+  <div class="card">
+    <h2>大タグごとの案内メッセージ</h2>
+    <p class="hint">メッセージが空欄のタグは案内を表示しません。タグごとに違う控え室を指示できます。</p>
+    <div id="tag-editors"></div>
+  </div>
+
+  <!-- 個別メンバー -->
+  <div class="card">
+    <h2>個別メンバーへの案内</h2>
+    <p class="hint">タグに含まれない特定の人や、タグと異なるメッセージを表示したい人を追加。</p>
+    <div id="member-editors"></div>
+    <div class="search-box" style="margin-top:14px;">
+      <input type="text" id="search" placeholder="名前・フリガナ・クラブで検索して追加">
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+
+  <div class="sticky-save">
+    <button class="btn-save" id="btn-save">保存する</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ALL_TAGS = [
+  '2026-27年度・三役',
+  'ゲスト・講演者',
+  '2026-27年度・ガバナー補佐',
+  '協議会主導・委員長',
+  '支援室',
+];
+
+let snapshot = null;
+let lounge = { enabled: true, tags: {}, members: {} };
+
+async function fetchData() {
+  const [snapRes, loungeRes] = await Promise.all([
+    fetch('/api/snapshot', { cache: 'no-store' }).then(r => r.json()),
+    fetch('/api/settings/lounge', { cache: 'no-store' }).then(r => r.ok ? r.json() : null),
+  ]);
+  snapshot = snapRes;
+  if (loungeRes && loungeRes.value) {
+    lounge = normalizeLounge(loungeRes.value);
+  }
+  document.getElementById('badge-status').textContent = '読込完了 / ' + snapshot.members.length + '名';
+  render();
+}
+
+// 旧形式 (tags=配列+message) が来たら新形式に正規化
+function normalizeLounge(raw) {
+  const out = { enabled: raw.enabled !== false, tags: {}, members: {} };
+  if (Array.isArray(raw.tags)) {
+    for (const t of ALL_TAGS) {
+      out.tags[t] = { message: raw.tags.includes(t) ? (raw.message || '') : '' };
+    }
+    for (const id of (raw.member_ids || [])) {
+      out.members[String(id)] = { message: raw.message || '' };
+    }
+  } else {
+    for (const t of ALL_TAGS) {
+      out.tags[t] = raw.tags && raw.tags[t] ? raw.tags[t] : { message: '' };
+    }
+    out.members = raw.members || {};
+  }
+  return out;
+}
+
+function render() {
+  document.getElementById('enabled').checked = !!lounge.enabled;
+  renderTagEditors();
+  renderMemberEditors();
+  renderSearchResults();
+}
+
+function renderTagEditors() {
+  document.getElementById('tag-editors').innerHTML = ALL_TAGS.map(t => {
+    const count = snapshot.members.filter(m => m.tag === t).length;
+    const cfg = lounge.tags[t] || { message: '' };
+    const hasMsg = (cfg.message || '').trim().length > 0;
+    return `<div class="tag-editor ${hasMsg ? 'has-message' : ''}" data-tag="${esc(t)}">
+      <div class="tag-editor-head">
+        <span class="tag-editor-name">${esc(t)}</span>
+        <span class="tag-editor-count">${count}名</span>
+        <button class="tag-editor-clear" data-clear-tag="${esc(t)}">クリア</button>
+      </div>
+      <textarea placeholder="例: 控え室は2階ホワイエにお越しください" data-msg-tag="${esc(t)}">${esc(cfg.message || '')}</textarea>
+    </div>`;
+  }).join('');
+  for (const ta of document.querySelectorAll('[data-msg-tag]')) {
+    ta.addEventListener('input', () => {
+      const t = ta.dataset.msgTag;
+      lounge.tags[t] = { message: ta.value };
+      ta.closest('.tag-editor').classList.toggle('has-message', ta.value.trim().length > 0);
+    });
+  }
+  for (const btn of document.querySelectorAll('[data-clear-tag]')) {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.clearTag;
+      lounge.tags[t] = { message: '' };
+      renderTagEditors();
+    });
+  }
+}
+
+function renderMemberEditors() {
+  const ids = Object.keys(lounge.members);
+  const root = document.getElementById('member-editors');
+  if (ids.length === 0) {
+    root.innerHTML = '<p style="color:#94a3b8;font-size:12px;padding:6px;">個別指定なし</p>';
+    return;
+  }
+  root.innerHTML = ids.map(id => {
+    const m = snapshot.members.find(x => x.id === Number(id));
+    if (!m) return '';
+    const cfg = lounge.members[id] || { message: '' };
+    return `<div class="member-editor" data-mid="${id}">
+      <div class="member-editor-head">
+        <span class="member-editor-name">${esc(m.name)}</span>
+        <span class="member-editor-club">${esc(m.club_name || '')}</span>
+        <button class="member-editor-remove" data-remove-mid="${id}">削除</button>
+      </div>
+      <textarea placeholder="この方への個別案内" data-msg-mid="${id}">${esc(cfg.message || '')}</textarea>
+    </div>`;
+  }).join('');
+  for (const ta of document.querySelectorAll('[data-msg-mid]')) {
+    ta.addEventListener('input', () => {
+      lounge.members[ta.dataset.msgMid] = { message: ta.value };
+    });
+  }
+  for (const btn of document.querySelectorAll('[data-remove-mid]')) {
+    btn.addEventListener('click', () => {
+      delete lounge.members[btn.dataset.removeMid];
+      renderMemberEditors();
+      renderSearchResults();
+    });
+  }
+}
+
+function renderSearchResults() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const added = new Set(Object.keys(lounge.members).map(Number));
+  // club_id → club_name マップ
+  const clubName = {};
+  for (const c of snapshot.clubs) clubName[c.id] = c.name;
+
+  let list = snapshot.members;
+  if (q) {
+    list = list.filter(m =>
+      (m.name && m.name.toLowerCase().includes(q)) ||
+      (m.name_kana && m.name_kana.toLowerCase().includes(q)) ||
+      (clubName[m.club_id] && clubName[m.club_id].toLowerCase().includes(q))
+    );
+  } else {
+    list = list.slice(0, 30);
+  }
+  if (list.length === 0) {
+    document.getElementById('search-results').innerHTML = '<div style="padding:14px;color:#94a3b8;font-size:12px;">該当なし</div>';
+    return;
+  }
+  document.getElementById('search-results').innerHTML = list.map(m => {
+    const isAdded = added.has(m.id);
+    const cls = isAdded ? 'added' : '';
+    const tagMeta = m.tag ? `<span class="meta" style="color:#b8860b;">${esc(m.tag)}</span>` : '';
+    return `<div class="search-row ${cls}" data-id="${m.id}">
+      <span style="font-weight:600;">${esc(m.name)}</span>
+      <span style="color:#94a3b8;font-size:11px;">${esc(m.name_kana || '')}</span>
+      ${tagMeta}
+      <span class="meta">${esc(clubName[m.club_id] || '')}</span>
+      <span style="margin-left:auto;font-size:11px;color:${isAdded ? '#16a34a' : '#6366f1'};font-weight:700;">${isAdded ? '追加済' : '+ 追加'}</span>
+    </div>`;
+  }).join('');
+  for (const row of document.querySelectorAll('.search-row')) {
+    row.addEventListener('click', () => {
+      const id = row.dataset.id;
+      if (lounge.members[id]) {
+        delete lounge.members[id];
+      } else {
+        lounge.members[id] = { message: '' };
+      }
+      renderMemberEditors();
+      renderSearchResults();
+    });
+  }
+}
+
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('error', !!isError);
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+async function save() {
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  lounge.enabled = document.getElementById('enabled').checked;
+  try {
+    const res = await fetch('/api/settings/lounge', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: lounge }),
+    });
+    if (!res.ok) throw new Error('http ' + res.status);
+    showToast('保存しました');
+  } catch (e) {
+    showToast('保存失敗: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('search').addEventListener('input', renderSearchResults);
+document.getElementById('btn-save').addEventListener('click', save);
+fetchData();
+</script>
+</body>
+</html>
