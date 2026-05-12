@@ -9,7 +9,7 @@ import csv
 import openpyxl
 from pathlib import Path
 
-XLSX_PATH = sys.argv[1] if len(sys.argv) > 1 else '/Users/furuken/Downloads/CLLS出欠一覧 (2).xlsx'
+XLSX_PATH = sys.argv[1] if len(sys.argv) > 1 else '/Users/furuken/Downloads/CLLS出欠一覧 (3).xlsx'
 OUT_CSV = sys.argv[2] if len(sys.argv) > 2 else 'data/members_real.csv'
 MAP_REPORT = 'data/club_mapping.tsv'
 UNMATCHED_REPORT = 'data/unmatched.tsv'
@@ -70,7 +70,8 @@ def normalize_club(raw: str) -> str:
     if not raw:
         return ''
     s = raw.strip()
-    # 全角空白・半角空白・zero-width space を除去
+    # 改行・全角空白・半角空白・zero-width space を除去
+    s = s.replace('\n', '').replace('\r', '')
     s = s.replace('　', '').replace(' ', '').replace('​', '')
 
     # 別名・別表記の救済
@@ -83,13 +84,20 @@ def normalize_club(raw: str) -> str:
     if s in aliases:
         return aliases[s]
 
+    # 既にカノニカル形式 (RSC / RAC / RC で終わる) ならそのまま
+    if s.endswith('RSC') or s.endswith('RAC'):
+        return s
+    if s.endswith('RC') and not s.endswith('ロータリークラブ'):
+        return s
     # サフィックス処理
-    # "○○ロータリー衛星クラブ" → "○○RSC" (Rotary Satellite Club)
+    # "○○ロータリー衛星クラブ" → "○○RSC"
     if s.endswith('ロータリー衛星クラブ'):
         return s[: -len('ロータリー衛星クラブ')] + 'RSC'
-    # "○○ローターアクトクラブ" → "○○RAC"
+    # "○○ローターアクトクラブ" or "○○ローターアクト" → "○○RAC"
     if s.endswith('ローターアクトクラブ'):
         return s[: -len('ローターアクトクラブ')] + 'RAC'
+    if s.endswith('ローターアクト'):
+        return s[: -len('ローターアクト')] + 'RAC'
     # "○○ロータリークラブ" → "○○RC"
     if s.endswith('ロータリークラブ'):
         return s[: -len('ロータリークラブ')] + 'RC'
@@ -132,6 +140,62 @@ TAG_LOOKUP['■協議会 講演者(会長、幹事部門)'] = '協議会主導�
 
 
 # ───────────────────────────────────────────────
+def parse_committee_sheet(wb):
+    """シート '協議会別参加者' を解析し、(name, club_canonical) → (committee, room) の dict を返す。
+    name は (対面)/(オンライン)/(代理) などの註釈を除去した形に正規化する。"""
+    if '協議会別参加者' not in wb.sheetnames:
+        return {}
+    ws = wb['協議会別参加者']
+
+    # R2 がクラブ短名のヘッダー (C8〜C83)
+    col_to_club = {}
+    for c in range(8, ws.max_column + 1):
+        v = ws.cell(row=2, column=c).value
+        if v and isinstance(v, str):
+            col_to_club[c] = normalize_club(v)
+
+    member_to_committee = {}
+    current_committee = None
+    current_room = None
+
+    for r in range(3, ws.max_row + 1):
+        c1 = ws.cell(row=r, column=1).value
+        c2 = ws.cell(row=r, column=2).value
+        c5 = ws.cell(row=r, column=5).value
+
+        # 主行 (C1 に数字) → 新しい委員会の開始
+        if c1 is not None and isinstance(c1, (int, float)):
+            current_committee = c2.strip() if isinstance(c2, str) else None
+            current_room = c5.strip() if isinstance(c5, str) else None
+
+        if not current_committee:
+            continue
+
+        # 「参加人数」など、メンバー欄ではない総計行を識別 (C5 が '参加人数' など)
+        if isinstance(c5, str) and c5 == '参加人数':
+            continue
+
+        for c, club in col_to_club.items():
+            v = ws.cell(row=r, column=c).value
+            if not v or not isinstance(v, str):
+                continue
+            # 註釈を除去: (対面) / （対面） / (オンライン) / （代理） など
+            name = re.sub(r'[(（].*?[)）]', '', v).replace('　', ' ').strip()
+            # 連続スペースを1つに
+            name = re.sub(r'\s+', ' ', name)
+            if not name:
+                continue
+            # 数字や非名前は除外
+            if name.isdigit():
+                continue
+            # 備考行を除外 (20文字以上 or 「様」終わり or 句点を含む)
+            if len(name) > 18 or name.endswith('様') or '。' in name or '：' in name:
+                continue
+            member_to_committee[(name, club)] = (current_committee, current_room)
+
+    return member_to_committee
+
+
 def parse_excel(path):
     wb = openpyxl.load_workbook(path, data_only=True)
     ws = wb['参加対象一覧']
@@ -164,7 +228,7 @@ def parse_excel(path):
         # まだ ■大タグが現れる前のヘッダー行(R1-R3 など)はスキップ
         if current_tag is None:
             continue
-        name = str(c3).replace('　', ' ').strip()
+        name = re.sub(r'\s+', ' ', str(c3).replace('　', ' ').strip())
         kana = (str(c4) if c4 else '').replace('　', ' ').strip()
         role = (str(c2) if c2 else '').replace('　', ' ').strip()
         raw_club = str(c1) if c1 else ''
@@ -187,7 +251,59 @@ def main():
     out_path = Path(OUT_CSV)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # 参加対象一覧を読む
     rows = parse_excel(XLSX_PATH)
+
+    # 協議会別参加者シートを読み、メンバーに委員会情報を紐付ける
+    wb = openpyxl.load_workbook(XLSX_PATH, data_only=True)
+    committee_map = parse_committee_sheet(wb)
+    for row in rows:
+        key = (row['name'], row['club'])
+        committee, room = committee_map.get(key, ('', ''))
+        row['committee'] = committee
+        row['committee_room'] = room
+
+    # 参加対象一覧にないが協議会別参加者シートに居る人を補完追加
+    existing_keys = set((r['name'], r['club']) for r in rows)
+    appended_from_committee = 0
+    for (name, club), (committee, room) in committee_map.items():
+        if (name, club) in existing_keys:
+            continue
+        if club not in CLUB_GROUP:
+            continue  # 未知のクラブはスキップ (基本ない)
+        rows.append({
+            'raw_club': '',
+            'club': club,
+            'name': name,
+            'kana': '',     # フリガナ後で追加
+            'role': '',     # 役職不明
+            'tag': '',
+            'sub_header': '(協議会から補完)',
+            'src_row': 0,
+            'committee': committee,
+            'committee_room': room,
+        })
+        appended_from_committee += 1
+    if appended_from_committee:
+        print(f'協議会シートから補完追加: {appended_from_committee}名')
+
+    # 委員会マッチ統計
+    committee_assigned = sum(1 for r in rows if r.get('committee'))
+    print(f'委員会紐付け: {committee_assigned} / {len(rows)} 人')
+    unmatched_in_committee = []
+    used_keys = set()
+    for row in rows:
+        used_keys.add((row['name'], row['club']))
+    for key in committee_map:
+        if key not in used_keys:
+            unmatched_in_committee.append(key)
+    if unmatched_in_committee:
+        print(f'  協議会シートにあるが参加対象一覧と一致しないメンバー: {len(unmatched_in_committee)}件')
+        with open('data/committee_unmatched.tsv', 'w', encoding='utf-8') as f:
+            f.write('名前\tクラブ\n')
+            for n, c in unmatched_in_committee:
+                f.write(f'{n}\t{c}\n')
+        print(f'  -> data/committee_unmatched.tsv に書き出し')
 
     # ── 重複排除: 同一(名前, クラブ) はタグ優先順位の高い1件にまとめる ──
     by_key = {}
@@ -238,10 +354,10 @@ def main():
         for raw, norm, src in unmatched:
             f.write(f'{raw}\t{norm}\t{src}\n')
 
-    # CSV出力（インポートAPIに食わせる形式）
+    # CSV出力（インポートAPIに食わせる形式: 9列）
     with open(out_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['グループ番号', 'グループ名', 'クラブ名', '名前', 'フリガナ', '役職', '大タグ'])
+        w.writerow(['グループ番号', 'グループ名', 'クラブ名', '名前', 'フリガナ', '役職', '大タグ', '協議会', '部屋'])
         skipped = 0
         for row in rows:
             gid = CLUB_GROUP.get(row['club'])
@@ -256,6 +372,8 @@ def main():
                 row['kana'],
                 row['role'],
                 row['tag'],
+                row.get('committee', ''),
+                row.get('committee_room', ''),
             ])
 
     # サマリ

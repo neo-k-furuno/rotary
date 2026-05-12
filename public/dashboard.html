@@ -258,6 +258,92 @@ body::before {
   font-size: 13px;
 }
 
+/* ── メンバー検索 ── */
+.search-section {
+  margin: 20px 28px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.04);
+}
+.search-section h3 {
+  font-size: 13px;
+  font-weight: 900;
+  color: #4338ca;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+.search-section .search-box {
+  position: relative;
+}
+.search-section input[type="text"] {
+  width: 100%;
+  padding: 12px 14px 12px 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fafbff;
+}
+.search-section input[type="text"]:focus {
+  outline: none;
+  border-color: #6366f1;
+  background: white;
+}
+.search-section .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 16px;
+  pointer-events: none;
+}
+.search-results {
+  margin-top: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fafbff;
+}
+.search-row {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  display: grid;
+  grid-template-columns: 160px 140px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  font-size: 13px;
+}
+.search-row:last-child { border-bottom: none; }
+.search-row.attended { background: #f6fdf8; }
+.search-row .sr-name { font-weight: 700; color: #1e293b; }
+.search-row .sr-kana { font-size: 11px; color: #94a3b8; font-weight: 500; }
+.search-row .sr-club { color: #64748b; font-size: 12px; }
+.search-row .sr-committee {
+  font-weight: 600;
+  color: #4338ca;
+}
+.search-row .sr-room {
+  font-size: 11px;
+  color: #6366f1;
+  font-weight: 500;
+}
+.search-row .sr-status .badge { font-size: 10px; padding: 2px 10px; border-radius: 10px; font-weight: 700; }
+.search-row .sr-status .badge.b-attended { background: #dcfce7; color: #16a34a; }
+.search-row .sr-status .badge.b-absent  { background: #fee2e2; color: #dc2626; }
+.search-row .sr-status .ts { display: block; font-size: 10px; color: #94a3b8; margin-top: 2px; font-weight: 500; }
+
+@media (max-width: 720px) {
+  .search-section { margin: 14px; padding: 12px 14px; }
+  .search-row { grid-template-columns: 1fr auto; gap: 8px; padding: 8px 12px; }
+  .search-row .sr-name { grid-column: 1; }
+  .search-row .sr-status { grid-column: 2; text-align: right; }
+  .search-row .sr-club, .search-row .sr-committee { grid-column: 1 / 3; font-size: 11px; }
+}
+
 /* ── Group attendance cards (リアルタイム) ── */
 .group-cards {
   display: grid;
@@ -683,6 +769,16 @@ summary:hover { background: #f8fafc; border-color: #c7d2fe; }
 
 <div class="group-tabs" id="group-tabs"></div>
 
+<!-- ── メンバー検索 (委員会/部屋表示) ── -->
+<div class="search-section">
+  <h3>メンバー検索 <span style="font-weight:500;color:#94a3b8;font-size:11px;margin-left:8px;">名前・かな・クラブ・委員会</span></h3>
+  <div class="search-box">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="member-search" placeholder="例: 田中、たなか、福岡南、危機管理">
+  </div>
+  <div class="search-results" id="member-search-results"></div>
+</div>
+
 <!-- ── グループ別の出席リアルタイムカード ── -->
 <div class="group-cards" id="group-cards"></div>
 
@@ -781,7 +877,74 @@ function render() {
   renderRoleSections(data);
   renderBreakdown(filteredClubs, filteredMembers);
   renderTimeline(filteredMembers);
+  renderMemberSearch(); // 検索結果も最新化
   applyActiveCard(); // SSE更新後も「タップ中のカード」を維持
+}
+
+function renderMemberSearch() {
+  if (!cachedData) return;
+  const q = (document.getElementById('member-search').value || '').trim().toLowerCase();
+  const root = document.getElementById('member-search-results');
+  const data = cachedData;
+  const committees = data.committees || [];
+  const cById = {};
+  for (const c of committees) cById[c.id] = c;
+
+  let list = data.members;
+  if (q) {
+    list = list.filter(m => {
+      const co = m.committee_id && cById[m.committee_id];
+      return (m.name && m.name.toLowerCase().includes(q))
+          || (m.name_kana && m.name_kana.toLowerCase().includes(q))
+          || (m.club_name && m.club_name.toLowerCase().includes(q))
+          || (m.role && m.role.toLowerCase().includes(q))
+          || (co && (co.name.toLowerCase().includes(q) || (co.room && co.room.toLowerCase().includes(q))));
+    });
+  } else {
+    list = []; // 検索無しなら何も表示しない (大量に出るのを避ける)
+  }
+
+  if (!q) {
+    root.innerHTML = '<div style="padding:18px;color:#94a3b8;font-size:12px;text-align:center;">検索ボックスに文字を入力してください</div>';
+    return;
+  }
+  if (list.length === 0) {
+    root.innerHTML = '<div style="padding:18px;color:#94a3b8;font-size:12px;text-align:center;">該当なし</div>';
+    return;
+  }
+
+  // 出席済みを先頭に、その中で時刻新しい順
+  list.sort((a, b) => {
+    if (!!a.attended !== !!b.attended) return b.attended - a.attended;
+    if (a.attended) return (b.attended_at || '').localeCompare(a.attended_at || '');
+    return (a.name_kana || '').localeCompare(b.name_kana || '', 'ja');
+  });
+
+  // 上限 80件
+  const limit = 80;
+  const shown = list.slice(0, limit);
+  let html = shown.map(m => {
+    const co = m.committee_id && cById[m.committee_id];
+    const cls = m.attended ? ' attended' : '';
+    const status = m.attended
+      ? `<span class="badge b-attended">出席</span>${m.attended_at ? `<span class="ts">${formatTime(m.attended_at)}</span>` : ''}`
+      : `<span class="badge b-absent">未</span>`;
+    return `<div class="search-row${cls}">
+      <div>
+        <div class="sr-name">${esc(m.name)}</div>
+        <div class="sr-kana">${esc(m.name_kana || '')}</div>
+      </div>
+      <div class="sr-club">${esc(m.club_name)}<br><span style="color:#cbd5e1;font-size:10px;">${esc(m.group_name)}</span></div>
+      <div>
+        ${co ? `<div class="sr-committee">${esc(co.name)}</div><div class="sr-room">部屋: ${esc(co.room || '-')}</div>` : '<span style="color:#cbd5e1;font-size:11px;">協議会なし</span>'}
+      </div>
+      <div class="sr-status">${status}</div>
+    </div>`;
+  }).join('');
+  if (list.length > limit) {
+    html += `<div style="padding:10px 14px;color:#94a3b8;font-size:11px;text-align:center;">他 ${list.length - limit} 件...</div>`;
+  }
+  root.innerHTML = html;
 }
 
 // カード一覧の定義 (順番: ガバナー補佐 → 地区委員長 → 第1〜第7グループ)
@@ -1148,6 +1311,8 @@ function startSSE() {
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) loadDashboard();
 });
+
+document.getElementById('member-search').addEventListener('input', renderMemberSearch);
 
 startSSE();
 loadDashboard();

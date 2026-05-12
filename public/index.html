@@ -376,6 +376,54 @@ body.has-conn-bar .screen { padding-top: 28px; }
   cursor: not-allowed;
 }
 
+/* 委員会案内 (受付完了画面) */
+.committee-notice {
+  margin-top: 20px;
+  background: #fff;
+  border: 2px solid #6366f1;
+  border-radius: 16px;
+  padding: 16px 24px;
+  text-align: center;
+  min-width: 320px;
+  max-width: 560px;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+  animation: doneIn 0.5s ease-out;
+}
+.committee-notice .committee-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #fff;
+  background: #6366f1;
+  padding: 4px 14px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.committee-notice .committee-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.4;
+}
+.committee-notice .committee-room {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #4338ca;
+  letter-spacing: 0.5px;
+}
+.committee-notice .committee-targets {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.5px;
+}
+#committee-notices .committee-notice + .committee-notice {
+  margin-top: 10px;
+}
+
 /* 控え室案内 (受付完了画面) */
 .lounge-notice {
   margin-top: 20px;
@@ -900,6 +948,7 @@ body.has-conn-bar .screen { padding-top: 28px; }
     <div class="done-msg">登録完了</div>
     <div class="done-detail" id="done-detail"></div>
     <div class="done-warn" id="done-warn" style="display:none;"></div>
+    <div id="committee-notices"></div>
     <div id="lounge-notices"></div>
     <button class="btn-home" onclick="showScreen('groups')">トップへ戻る</button>
   </div>
@@ -1265,10 +1314,44 @@ function registerAttendance() {
     warn.style.display = 'none';
   }
 
+  // 委員会案内 (該当メンバーに committee_id があれば表示)
+  showCommitteeNotice(selected);
+
   // 控え室案内 (lounge 設定にマッチする人がいれば表示)
   showLoungeNoticeIfApplicable(selected);
 
   showScreen('done');
+}
+
+function showCommitteeNotice(selected) {
+  const container = document.getElementById('committee-notices');
+  container.innerHTML = '';
+  const snap = RA.getSnapshot();
+  if (!snap) return;
+  const committees = snap.committees || [];
+  if (committees.length === 0) return;
+
+  // committee_id → { name, room, members[] } で集約
+  const byCommittee = new Map();
+  for (const m of selected) {
+    if (!m.committee_id) continue;
+    const co = committees.find(c => c.id === m.committee_id);
+    if (!co) continue;
+    if (!byCommittee.has(co.id)) byCommittee.set(co.id, { name: co.name, room: co.room, names: [] });
+    byCommittee.get(co.id).names.push(m.name);
+  }
+
+  for (const info of byCommittee.values()) {
+    const div = document.createElement('div');
+    div.className = 'committee-notice';
+    div.innerHTML = `
+      <span class="committee-label">参加協議会</span>
+      <div class="committee-name">${esc(info.name)}</div>
+      ${info.room ? `<div class="committee-room">部屋: ${esc(info.room)}</div>` : ''}
+      <div class="committee-targets">${esc(info.names.join('、'))} さん</div>
+    `;
+    container.appendChild(div);
+  }
 }
 
 function showLoungeNoticeIfApplicable(selected) {

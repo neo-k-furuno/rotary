@@ -28,9 +28,16 @@ db.exec(`
     name TEXT NOT NULL,
     UNIQUE(group_id, name)
   );
+  CREATE TABLE IF NOT EXISTS committees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    room TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 999
+  );
   CREATE TABLE IF NOT EXISTS members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     club_id INTEGER NOT NULL REFERENCES clubs(id),
+    committee_id INTEGER REFERENCES committees(id),
     name TEXT NOT NULL,
     name_kana TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL DEFAULT '',
@@ -40,13 +47,16 @@ db.exec(`
   );
 `);
 
-// 既存DBから role / tag カラムが無ければ追加 (マイグレーション)
+// 既存DBから role / tag / committee_id カラムが無ければ追加 (マイグレーション)
 const memberCols = db.prepare("PRAGMA table_info(members)").all().map(c => c.name);
 if (!memberCols.includes('role')) {
   db.exec("ALTER TABLE members ADD COLUMN role TEXT NOT NULL DEFAULT ''");
 }
 if (!memberCols.includes('tag')) {
   db.exec("ALTER TABLE members ADD COLUMN tag TEXT NOT NULL DEFAULT ''");
+}
+if (!memberCols.includes('committee_id')) {
+  db.exec("ALTER TABLE members ADD COLUMN committee_id INTEGER REFERENCES committees(id)");
 }
 
 // 設定保存用テーブル (key-value)
@@ -167,6 +177,70 @@ app.get('/api/tags/:tag/members', (req, res) => {
   res.json(rows);
 });
 
+// --- API: Members CRUD (admin) ---
+// POST /api/members - 新規作成 (club_id, name 必須)
+app.post('/api/members', (req, res) => {
+  const b = req.body || {};
+  if (!b.club_id || !b.name) return res.status(400).json({ error: 'club_id and name required' });
+  const club = db.prepare('SELECT id FROM clubs WHERE id = ?').get(b.club_id);
+  if (!club) return res.status(400).json({ error: 'club_id not found' });
+  if (b.committee_id) {
+    const co = db.prepare('SELECT id FROM committees WHERE id = ?').get(b.committee_id);
+    if (!co) return res.status(400).json({ error: 'committee_id not found' });
+  }
+  const info = db.prepare(
+    'INSERT INTO members (club_id, committee_id, name, name_kana, role, tag) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(
+    b.club_id,
+    b.committee_id || null,
+    String(b.name).trim(),
+    String(b.name_kana || '').trim(),
+    String(b.role || '').trim(),
+    String(b.tag || '').trim()
+  );
+  broadcast({ type: 'data_reload' });
+  res.json({ ok: true, id: info.lastInsertRowid });
+});
+
+// PUT /api/members/:id - 更新 (フィールドは部分更新可)
+app.put('/api/members/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const existing = db.prepare('SELECT * FROM members WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  const b = req.body || {};
+  if (b.club_id) {
+    const club = db.prepare('SELECT id FROM clubs WHERE id = ?').get(b.club_id);
+    if (!club) return res.status(400).json({ error: 'club_id not found' });
+  }
+  if (b.committee_id) {
+    const co = db.prepare('SELECT id FROM committees WHERE id = ?').get(b.committee_id);
+    if (!co) return res.status(400).json({ error: 'committee_id not found' });
+  }
+  const updated = {
+    club_id: b.club_id !== undefined ? b.club_id : existing.club_id,
+    committee_id: b.committee_id !== undefined ? (b.committee_id || null) : existing.committee_id,
+    name: b.name !== undefined ? String(b.name).trim() : existing.name,
+    name_kana: b.name_kana !== undefined ? String(b.name_kana).trim() : existing.name_kana,
+    role: b.role !== undefined ? String(b.role).trim() : existing.role,
+    tag: b.tag !== undefined ? String(b.tag).trim() : existing.tag,
+  };
+  db.prepare(
+    'UPDATE members SET club_id = ?, committee_id = ?, name = ?, name_kana = ?, role = ?, tag = ? WHERE id = ?'
+  ).run(updated.club_id, updated.committee_id, updated.name, updated.name_kana, updated.role, updated.tag, id);
+  broadcast({ type: 'data_reload' });
+  res.json({ ok: true });
+});
+
+// DELETE /api/members/:id - 削除
+app.delete('/api/members/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const existing = db.prepare('SELECT id FROM members WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  db.prepare('DELETE FROM members WHERE id = ?').run(id);
+  broadcast({ type: 'data_reload' });
+  res.json({ ok: true });
+});
+
 // --- API: Members by club ---
 app.get('/api/clubs/:clubId/members', (req, res) => {
   const rows = db.prepare(
@@ -227,7 +301,10 @@ app.get('/api/snapshot', (req, res) => {
   const groups = db.prepare('SELECT id, name FROM groups_tbl ORDER BY id').all();
   const clubs = db.prepare('SELECT id, group_id, name FROM clubs ORDER BY group_id, name').all();
   const members = db.prepare(
-    'SELECT id, club_id, name, name_kana, role, tag, attended, attended_at FROM members ORDER BY club_id, name_kana, name'
+    'SELECT id, club_id, committee_id, name, name_kana, role, tag, attended, attended_at FROM members ORDER BY club_id, name_kana, name'
+  ).all();
+  const committees = db.prepare(
+    'SELECT id, name, room, sort_order FROM committees ORDER BY sort_order, id'
   ).all();
   const settingsRows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};
@@ -235,7 +312,7 @@ app.get('/api/snapshot', (req, res) => {
     try { settings[r.key] = JSON.parse(r.value); }
     catch (e) { settings[r.key] = r.value; }
   }
-  res.json({ groups, clubs, members, settings, server_ts: nowLocal() });
+  res.json({ groups, clubs, members, committees, settings, server_ts: nowLocal() });
 });
 
 // --- API: Ping (接続テスト用) ---
@@ -266,19 +343,24 @@ app.get('/api/dashboard', (req, res) => {
   `).all();
 
   const members = db.prepare(`
-    SELECT m.id, m.name, m.role, m.tag, m.attended, m.attended_at,
+    SELECT m.id, m.name, m.name_kana, m.role, m.tag, m.attended, m.attended_at,
       c.id as club_id, c.name as club_name,
-      g.id as group_id, g.name as group_name
+      g.id as group_id, g.name as group_name,
+      m.committee_id
     FROM members m
     JOIN clubs c ON m.club_id = c.id
     JOIN groups_tbl g ON c.group_id = g.id
     ORDER BY g.id, c.name, m.name
   `).all();
 
+  const committees = db.prepare(
+    'SELECT id, name, room FROM committees ORDER BY sort_order, id'
+  ).all();
+
   const totalMembers = members.length;
   const totalAttended = members.filter(m => m.attended).length;
 
-  res.json({ clubs, members, totalMembers, totalAttended });
+  res.json({ clubs, members, committees, totalMembers, totalAttended });
 });
 
 // --- CSV helpers ---
@@ -316,20 +398,24 @@ app.get('/api/export', (req, res) => {
   const rows = db.prepare(`
     SELECT g.name as group_name, c.name as club_name, m.name as member_name,
       m.role, m.tag,
+      COALESCE(co.name, '') as committee_name,
+      COALESCE(co.room, '') as committee_room,
       CASE WHEN m.attended = 1 THEN '出席' ELSE '未出席' END as status,
       COALESCE(m.attended_at, '') as attended_at
     FROM members m
     JOIN clubs c ON m.club_id = c.id
     JOIN groups_tbl g ON c.group_id = g.id
+    LEFT JOIN committees co ON m.committee_id = co.id
     ORDER BY g.id, c.name, m.name
   `).all();
 
   const BOM = '\uFEFF';
-  let csv = BOM + 'グループ,クラブ,名前,役職,大タグ,出欠,出席時刻\n';
+  let csv = BOM + 'グループ,クラブ,名前,役職,大タグ,協議会,部屋,出欠,出席時刻\n';
   for (const r of rows) {
     csv += [
       csvQuote(r.group_name), csvQuote(r.club_name), csvQuote(r.member_name),
       csvQuote(r.role), csvQuote(r.tag),
+      csvQuote(r.committee_name), csvQuote(r.committee_room),
       r.status, r.attended_at,
     ].join(',') + '\n';
   }
@@ -352,16 +438,20 @@ app.post('/api/import', upload.single('file'), (req, res) => {
     const header = lines.shift();
 
     // Clear existing data
-    db.exec('DELETE FROM members; DELETE FROM clubs; DELETE FROM groups_tbl;');
+    db.exec('DELETE FROM members; DELETE FROM clubs; DELETE FROM groups_tbl; DELETE FROM committees;');
 
     const insertGroup = db.prepare('INSERT OR IGNORE INTO groups_tbl (id, name) VALUES (?, ?)');
     const findClub = db.prepare('SELECT id FROM clubs WHERE group_id = ? AND name = ?');
     const insertClub = db.prepare('INSERT INTO clubs (group_id, name) VALUES (?, ?)');
+    const findCommittee = db.prepare('SELECT id, room FROM committees WHERE name = ?');
+    const insertCommittee = db.prepare('INSERT INTO committees (name, room, sort_order) VALUES (?, ?, ?)');
+    const updateCommitteeRoom = db.prepare('UPDATE committees SET room = ? WHERE id = ?');
     const insertMember = db.prepare(
-      'INSERT INTO members (club_id, name, name_kana, role, tag) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO members (club_id, name, name_kana, role, tag, committee_id) VALUES (?, ?, ?, ?, ?, ?)'
     );
 
     const tx = db.transaction((lines) => {
+      let committeeOrder = 0;
       for (const line of lines) {
         const cols = parseCsvLine(line);
         if (cols.length < 4) continue;
@@ -373,6 +463,8 @@ app.post('/api/import', upload.single('file'), (req, res) => {
         const memberKana = cols[4] || '';
         const memberRole = cols[5] || '';
         const memberTag  = cols[6] || '';
+        const committeeName = cols[7] || '';
+        const committeeRoom = cols[8] || '';
 
         if (!groupId || !groupName || !clubName || !memberName) continue;
 
@@ -384,7 +476,23 @@ app.post('/api/import', upload.single('file'), (req, res) => {
           club = { id: info.lastInsertRowid };
         }
 
-        insertMember.run(club.id, memberName, memberKana, memberRole, memberTag);
+        let committeeId = null;
+        if (committeeName) {
+          let row = findCommittee.get(committeeName);
+          if (!row) {
+            committeeOrder += 1;
+            const info = insertCommittee.run(committeeName, committeeRoom, committeeOrder);
+            committeeId = info.lastInsertRowid;
+          } else {
+            committeeId = row.id;
+            // 部屋情報が空だったら埋める
+            if (!row.room && committeeRoom) {
+              updateCommitteeRoom.run(committeeRoom, committeeId);
+            }
+          }
+        }
+
+        insertMember.run(club.id, memberName, memberKana, memberRole, memberTag, committeeId);
       }
     });
 
