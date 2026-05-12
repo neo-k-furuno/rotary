@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.github
+.claude
+.DS_Store
+attendance.db
+attendance.db-shm
+attendance.db-wal
+data
+*.xlsx
+docs
+scripts/*.sh
+scripts/*.py
+README.md
+RUNBOOK.md

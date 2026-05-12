@@ -9,7 +9,11 @@ const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 
 // --- Database Setup ---
-const db = new Database(path.join(__dirname, 'attendance.db'));
+// 本番では DB_PATH 環境変数で永続ボリューム上のパスを指定する (例: /data/attendance.db)
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'attendance.db');
+const dbDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

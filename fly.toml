@@ -1,0 +1,29 @@
+# Fly.io デプロイ設定
+# Tokyo (nrt) リージョン固定 / 1マシン常駐 / 永続ボリューム /data
+app = "rotary-attendance"
+primary_region = "nrt"
+
+[build]
+  # Dockerfile を使用
+
+[env]
+  PORT = "8080"
+  DB_PATH = "/data/attendance.db"
+  NODE_ENV = "production"
+
+[mounts]
+  source = "rotary_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # ぬるぬる維持のためアイドルでも停止しない
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

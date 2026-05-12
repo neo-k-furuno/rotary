@@ -103,6 +103,72 @@ SQLiteは `attendance.db` に永続化されているのでデータは消えま
 PORT=8080 ./scripts/start.sh
 ```
 
+---
+
+## クラウド運用 (Fly.io 東京リージョン)
+
+外部からダッシュボードにアクセスしたい場合のクラウドデプロイ手順。
+
+### 初回セットアップ（一度だけ）
+
+```bash
+# 1. flyctl インストール (Mac)
+brew install flyctl
+
+# 2. Fly.io アカウント作成 + ログイン (ブラウザが開く)
+fly auth signup     # 既にアカウントあれば fly auth login
+
+# 3. アプリ作成 + Volume 作成 + 初回デプロイ
+cd ~/dev/Rotary_Attendance
+fly launch --copy-config --no-deploy --region nrt --name rotary-attendance
+fly volumes create rotary_data --region nrt --size 1
+fly deploy
+```
+
+完了するとURLが発行されます: `https://rotary-attendance.fly.dev/`
+
+### 名簿の投入（クラウド版）
+
+```bash
+# 1. Excel から CSV に変換
+python3 scripts/import_excel.py ~/Downloads/CLLS出欠一覧.xlsx data/members_real.csv
+
+# 2. クラウドへ投入
+curl -X POST -F "file=@data/members_real.csv" https://rotary-attendance.fly.dev/api/import
+```
+
+### CSV エクスポート（クラウド版）
+
+```bash
+curl https://rotary-attendance.fly.dev/api/export -o attendance_export.csv
+```
+
+### 更新を反映
+
+```bash
+git pull            # 最新コードを取得
+fly deploy          # クラウドへ再デプロイ
+```
+
+### ログ確認 / 停止 / 再起動
+
+```bash
+fly logs            # リアルタイムログ
+fly status          # マシン状態
+fly machine restart # 再起動 (DBは保持される)
+fly apps destroy rotary-attendance   # 完全削除 (注意!)
+```
+
+### 想定構成
+
+| 端末 | アクセス先 |
+|---|---|
+| iPad ×4（会場） | `https://rotary-attendance.fly.dev/` |
+| 有人机PC（会場） | 同上 |
+| 管理者スマホ（**会場外もOK**） | `https://rotary-attendance.fly.dev/dashboard.html` |
+
+iPad はオフラインキャッシュ + 送信キューが効いてるので、会場WiFi が一時的に切れても操作継続できます。
+
 ## CSV インポート/エクスポート形式
 
 ```
