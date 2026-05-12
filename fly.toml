@@ -1,5 +1,9 @@
 # Fly.io デプロイ設定
-# Tokyo (nrt) リージョン固定 / 1マシン常駐 / 永続ボリューム /data
+# - 東京リージョン (nrt) 固定: 国内 iPad/スマホ から物理的に最寄り
+# - 1マシン常駐 + auto_stop=off: コールドスタート禁止でぬるぬる維持
+# - 永続ボリューム /data: SQLite (attendance.db) の永続化
+# - ヘルスチェック /api/ping: 異常時に自動再起動
+# - SQLite を使うため水平スケールしない (1マシン固定)
 app = "rotary-attendance"
 primary_region = "nrt"
 
@@ -18,12 +22,20 @@ primary_region = "nrt"
 [http_service]
   internal_port = 8080
   force_https = true
-  # ぬるぬる維持のためアイドルでも停止しない
-  auto_stop_machines = "off"
+  auto_stop_machines = "off"          # idle 停止禁止
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 1            # 常駐 1台
+  processes = ["app"]
+
+  # ヘルスチェック: 30秒毎に /api/ping、3回失敗で再起動
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/api/ping"
 
 [[vm]]
-  cpu_kind = "shared"
+  size = "shared-cpu-1x"
   cpus = 1
-  memory_mb = 256
+  memory = "512mb"   # iPad 4 + PC 1 + スマホ 2 同時 + SSE 7並列 + SQLite キャッシュ余裕

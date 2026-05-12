@@ -386,8 +386,24 @@ function seedDummyData() {
 
 // ダミーデータは本番運用のため自動投入しない (必要なら手動で seedDummyData() を呼ぶ)
 
+// --- Graceful shutdown ---
+// Fly.io 等で SIGTERM が来た時にSSE接続とDBを綺麗に閉じる
+function gracefulShutdown(signal) {
+  return () => {
+    console.log(`[${signal}] シャットダウン中...`);
+    for (const res of sseClients) {
+      try { res.end(); } catch (e) {}
+    }
+    sseClients.clear();
+    try { db.close(); } catch (e) {}
+    setTimeout(() => process.exit(0), 500);
+  };
+}
+process.on('SIGTERM', gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  gracefulShutdown('SIGINT'));
+
 // --- Start ---
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   const interfaces = os.networkInterfaces();
   let localIP = 'localhost';
   for (const iface of Object.values(interfaces)) {
