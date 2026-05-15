@@ -9,7 +9,25 @@ import csv
 import openpyxl
 from pathlib import Path
 
-XLSX_PATH = sys.argv[1] if len(sys.argv) > 1 else '/Users/furuken/Downloads/CLLS出欠一覧 (3).xlsx'
+XLSX_PATH = sys.argv[1] if len(sys.argv) > 1 else '/Users/furuken/Downloads/CLLS出欠一覧 (4).xlsx'
+
+# ── 名前の表記揺れを正式名称に正規化 ──
+# 複数のシート間で漢字違い等が発生していた人物を統一する。
+# 「旧表記 → 正式名称」のマッピング。両シートで適用される。
+NAME_FIX = {
+    '上野 優ニ':    '上野 優二',      # カタカナ「ニ」→漢字「二」
+    '具嶋 考一朗':  '具嶋 孝一朗',    # 「考」→「孝」
+    '川端 輝雅':    '川畑 輝雅',      # 「端」→「畑」
+    '神崎 洋青':    '神崎 洋幸',      # 「青」→「幸」
+    '高城 直記':    '高城 直紀',      # 「記」→「紀」
+}
+
+def canon_name(s):
+    """名前を正規化 (空白統一 + NAME_FIX マッピング適用)"""
+    if not s:
+        return s
+    s = re.sub(r'\s+', ' ', str(s).replace('　', ' ').strip())
+    return NAME_FIX.get(s, s)
 OUT_CSV = sys.argv[2] if len(sys.argv) > 2 else 'data/members_real.csv'
 MAP_REPORT = 'data/club_mapping.tsv'
 UNMATCHED_REPORT = 'data/unmatched.tsv'
@@ -132,6 +150,8 @@ TAG_PRIORITY = {
 TAG_LOOKUP = {}
 for k, v in TAG_CANON.items():
     TAG_LOOKUP[k] = v
+# Excel側で名称が拡張されている場合の救済
+TAG_LOOKUP['■2026-27年度・三役と井浦さん'] = '2026-27年度・三役'
 # 協議会講演者セクションの中で「◆各クラブ出席者」以前にいる委員長は「協議会主導・委員長」と統合
 # (R36-R37 の RLI委員長 / 広報・公共イメージ委員長 など)
 # ◆各クラブ出席者 以降は空タグ (一般会員扱い)
@@ -180,9 +200,8 @@ def parse_committee_sheet(wb):
             if not v or not isinstance(v, str):
                 continue
             # 註釈を除去: (対面) / （対面） / (オンライン) / （代理） など
-            name = re.sub(r'[(（].*?[)）]', '', v).replace('　', ' ').strip()
-            # 連続スペースを1つに
-            name = re.sub(r'\s+', ' ', name)
+            name = re.sub(r'[(（].*?[)）]', '', v).strip()
+            name = canon_name(name)
             if not name:
                 continue
             # 数字や非名前は除外
@@ -228,7 +247,10 @@ def parse_excel(path):
         # まだ ■大タグが現れる前のヘッダー行(R1-R3 など)はスキップ
         if current_tag is None:
             continue
-        name = re.sub(r'\s+', ' ', str(c3).replace('　', ' ').strip())
+        raw_name = str(c3)
+        # 註釈を除去 (例: "財前 晴紀(代理）")
+        raw_name = re.sub(r'[(（].*?[)）]', '', raw_name)
+        name = canon_name(raw_name)
         kana = (str(c4) if c4 else '').replace('　', ' ').strip()
         role = (str(c2) if c2 else '').replace('　', ' ').strip()
         raw_club = str(c1) if c1 else ''
@@ -355,15 +377,26 @@ def main():
             f.write(f'{raw}\t{norm}\t{src}\n')
 
     # CSV出力（インポートAPIに食わせる形式: 9列）
+    # 「支援室」タグ or 「当日運営補助」 サブヘッダの人はDB除外
+    #   ただし協議会(委員会)にも登録されている人は残し、タグはクリアする
     with open(out_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['グループ番号', 'グループ名', 'クラブ名', '名前', 'フリガナ', '役職', '大タグ', '協議会', '部屋'])
         skipped = 0
+        excluded_support = 0
         for row in rows:
             gid = CLUB_GROUP.get(row['club'])
             if gid is None:
                 skipped += 1
                 continue
+            is_support = row.get('tag') == '支援室' or row.get('sub_header') == '当日運営補助'
+            if is_support:
+                if row.get('committee'):
+                    # 委員会に登録されてる人は残す。tag は空にして一般会員扱い
+                    row['tag'] = ''
+                else:
+                    excluded_support += 1
+                    continue
             w.writerow([
                 gid,
                 GROUPS[gid],
@@ -375,6 +408,8 @@ def main():
                 row.get('committee', ''),
                 row.get('committee_room', ''),
             ])
+    if excluded_support:
+        print(f'支援室・当日運営補助で DB除外: {excluded_support}名')
 
     # サマリ
     tag_count = {}
