@@ -708,6 +708,50 @@ app.get('/api/owner/sessions/:id', (req, res) => {
   res.json(row);
 });
 
+// セッション再開: 過去のセッションの出席状態を現在の状態に復元し、セッションを進行中に戻す
+app.post('/api/owner/sessions/:id/resume', (req, res) => {
+  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'not found' });
+  if (!session.ended_at) return res.status(400).json({ error: 'session is already ongoing' });
+  if (!session.snapshot_json) return res.status(400).json({ error: 'no snapshot to resume from' });
+
+  let snap;
+  try { snap = JSON.parse(session.snapshot_json); }
+  catch (e) { return res.status(400).json({ error: 'snapshot parse error' }); }
+
+  const now = nowLocal();
+  let restoredCount = 0;
+  let missingCount = 0;
+  const tx = db.transaction(() => {
+    // 他に進行中セッションがあれば異常終了として閉じる
+    db.prepare(
+      "UPDATE sessions SET ended_at = ?, note = note || ' (再開操作前に異常終了)' WHERE ended_at IS NULL AND id != ?"
+    ).run(now, session.id);
+
+    // 全員リセット
+    db.prepare('UPDATE members SET attended = 0, attended_at = NULL').run();
+
+    // snapshot の attended_members を復元
+    const upd = db.prepare('UPDATE members SET attended = 1, attended_at = ? WHERE id = ?');
+    for (const m of (snap.attended_members || [])) {
+      if (!m.id) { missingCount++; continue; }
+      const info = upd.run(m.attended_at || now, m.id);
+      if (info.changes > 0) restoredCount++;
+      else missingCount++;
+    }
+
+    // セッションを再オープン (ended_at = NULL に戻す + 履歴メモ追加)
+    db.prepare(
+      "UPDATE sessions SET ended_at = NULL, snapshot_json = NULL, note = note || ' [再開: ' || ? || ']' WHERE id = ?"
+    ).run(now, session.id);
+  });
+  tx();
+
+  broadcast({ type: 'attendance_update' });
+  broadcast({ type: 'session_resume' });
+  res.json({ ok: true, session_id: session.id, restored: restoredCount, missing: missingCount });
+});
+
 // セッションの出席者リストを CSV ダウンロード
 app.get('/api/owner/sessions/:id/csv', (req, res) => {
   const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.id);

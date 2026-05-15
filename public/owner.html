@@ -142,8 +142,8 @@ h1 {
 }
 .session-row {
   display: grid;
-  grid-template-columns: 1fr 110px 110px 90px;
-  gap: 12px;
+  grid-template-columns: 1fr 100px 80px 80px 80px;
+  gap: 10px;
   align-items: center;
   padding: 12px 14px;
   border: 1px solid #e2e8f0;
@@ -172,19 +172,29 @@ h1 {
   color: #1e293b;
 }
 .session-row .s-count small { color: #94a3b8; font-weight: 500; font-size: 11px; }
-.session-row a.btn-csv {
+.session-row a.btn-csv,
+.session-row button.btn-resume {
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
   color: #16a34a;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
   text-decoration: none;
   text-align: center;
+  cursor: pointer;
+  font-family: inherit;
 }
 .session-row a.btn-csv:hover { background: #dcfce7; }
-.session-row .btn-csv.disabled {
+.session-row button.btn-resume {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+.session-row button.btn-resume:hover { background: #e0e7ff; }
+.session-row .btn-csv.disabled,
+.session-row .btn-resume.disabled {
   background: #f1f5f9;
   border-color: #e2e8f0;
   color: #94a3b8;
@@ -394,6 +404,9 @@ function renderSessions(sessions) {
       const csvLink = s.ended_at
         ? `<a class="btn-csv" href="/api/owner/sessions/${s.id}/csv">CSV</a>`
         : `<span class="btn-csv disabled">進行中</span>`;
+      const resumeBtn = s.ended_at
+        ? `<button class="btn-resume" data-resume="${s.id}">再開</button>`
+        : `<span class="btn-resume disabled">進行中</span>`;
       return `<div class="session-row${ongoingCls}">
         <div>
           <div class="s-id">#${s.id}${s.ended_at ? '' : ' (進行中)'}</div>
@@ -402,8 +415,34 @@ function renderSessions(sessions) {
         <div class="s-count">${s.total_attended} <small>/ ${s.total_members}</small></div>
         <div class="s-count">${s.total_members > 0 ? Math.round(s.total_attended/s.total_members*100) : 0}<small>%</small></div>
         ${csvLink}
+        ${resumeBtn}
       </div>`;
     }).join('');
+
+  // 再開ボタンのハンドラ
+  for (const btn of document.querySelectorAll('button[data-resume]')) {
+    btn.addEventListener('click', () => {
+      const sid = btn.dataset.resume;
+      const target = sessions.find(s => String(s.id) === sid);
+      openConfirm({
+        title: `セッション #${sid} を再開しますか？`,
+        body: `終了時点の出席状態 (${target.total_attended}名) を復元し、再度受付を継続できるようにします。`,
+        warn: '⚠ 現在の出席データは全てリセットされます。進行中の別セッションは自動で異常終了として保存されます。',
+        btnLabel: '再開',
+        btnClass: 'btn-confirm-start',
+        onConfirm: async () => {
+          const res = await fetch(`/api/owner/sessions/${sid}/resume`, { method: 'POST' });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || ('http ' + res.status));
+          }
+          const data = await res.json();
+          showToast(`セッション #${sid} を再開しました (${data.restored}名復元)`);
+          await refresh();
+        },
+      });
+    });
+  }
 }
 
 function showToast(msg, isError) {
