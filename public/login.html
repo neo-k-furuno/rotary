@@ -131,6 +131,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   </div>
   <h1>ROTARY 出欠管理</h1>
   <p class="subtitle">受付スタッフ / 管理者のパスワードを入力してください</p>
+  <div id="role-hint" style="display:none;margin-bottom:18px;padding:10px 14px;border-radius:8px;background:#fef3c7;border:1px solid #fbbf24;color:#78350f;font-size:12px;font-weight:600;text-align:center;line-height:1.6;letter-spacing:0.5px;"></div>
 
   <form id="login-form" autocomplete="off">
     <label for="pw">パスワード</label>
@@ -155,6 +156,20 @@ function getNext() {
   if (!next || !next.startsWith('/')) return null;
   return next;
 }
+
+// next= 指定があれば、その遷移先に必要なロールを推測してヒント表示
+(function () {
+  const next = getNext();
+  if (!next) return;
+  let needRole = null;
+  if (next === '/' || next === '/index.html') needRole = 'staff';
+  else if (next === '/admin.html' || next === '/dashboard.html') needRole = 'admin';
+  if (!needRole) return;
+  const hint = document.getElementById('role-hint');
+  const label = needRole === 'admin' ? '管理者' : '受付スタッフ';
+  hint.innerHTML = `この先のページには <strong>${label}</strong> のパスワードが必要です`;
+  hint.style.display = 'block';
+})();
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();

@@ -154,8 +154,14 @@ function parseCookies(header) {
   return out;
 }
 
-// 管理者専用ルート
-const ADMIN_HTML = new Set(['/admin.html', '/dashboard.html']);
+// 各ページに必要なロール (staff専用 / admin専用 / 共通)
+const PATH_ROLE = {
+  '/':               'staff',
+  '/index.html':     'staff',
+  '/admin.html':     'admin',
+  '/dashboard.html': 'admin',
+};
+// 管理者専用 API (書き込み・設定系)
 const ADMIN_API_RE = /^\/api\/(import|export|reset|settings|members)(\/|$)/;
 
 // ログインAPI
@@ -192,16 +198,18 @@ app.use((req, res, next) => {
     }
     return res.status(401).json({ error: 'auth required' });
   }
-  const needAdmin = ADMIN_HTML.has(req.path) || ADMIN_API_RE.test(req.path);
-  if (needAdmin && role !== 'admin') {
+
+  // ページ毎の必要ロール (staff専用 / admin専用) を厳密にチェック
+  const requiredPathRole = PATH_ROLE[req.path];
+  if (requiredPathRole && requiredPathRole !== role) {
     if (isHtmlNav) {
-      return res.status(403).send(`<!doctype html><meta charset="utf-8">
-<style>body{font-family:'Noto Sans JP',sans-serif;text-align:center;padding:60px 20px;color:#1e293b;}
-h1{color:#dc2626;}a{display:inline-block;margin-top:18px;background:#6366f1;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;}</style>
-<h1>管理者専用ページ</h1>
-<p>このページは管理者パスワードでログインした方のみアクセスできます。</p>
-<a href="/login.html?next=${encodeURIComponent(req.originalUrl)}">ログイン画面へ</a>`);
+      // HTML ナビは再ログインを促す (異なるロールのページに行くにはパスワード入れ直し)
+      return res.redirect('/login.html?next=' + encodeURIComponent(req.originalUrl));
     }
+    return res.status(403).json({ error: `role required: ${requiredPathRole}` });
+  }
+  // admin専用 API
+  if (ADMIN_API_RE.test(req.path) && role !== 'admin') {
     return res.status(403).json({ error: 'admin only' });
   }
   req.userRole = role;
