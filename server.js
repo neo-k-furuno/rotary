@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3000;
@@ -122,6 +123,92 @@ function broadcast(data) {
 
 // --- Middleware ---
 app.use(express.json());
+
+// ============== 認証 ==============
+// 環境変数で上書き可能。本番は Fly.io secrets で設定推奨。
+const STAFF_PASSWORD = process.env.STAFF_PASSWORD || 'tojima';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'tjm';
+const APP_SECRET    = process.env.APP_SECRET    || 'dev-secret-change-me';
+const COOKIE_MAX_AGE = 24 * 60 * 60; // 1日
+
+function hmac(s) { return crypto.createHmac('sha256', APP_SECRET).update(s).digest('hex'); }
+function makeToken(role) { return role + '.' + hmac(role); }
+function verifyToken(token) {
+  if (!token) return null;
+  const i = token.indexOf('.');
+  if (i <= 0) return null;
+  const role = token.slice(0, i);
+  const sig  = token.slice(i + 1);
+  if (role !== 'staff' && role !== 'admin') return null;
+  if (hmac(role) !== sig) return null;
+  return role;
+}
+function parseCookies(header) {
+  const out = {};
+  if (!header) return out;
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx < 0) continue;
+    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return out;
+}
+
+// 管理者専用ルート
+const ADMIN_HTML = new Set(['/admin.html', '/dashboard.html']);
+const ADMIN_API_RE = /^\/api\/(import|export|reset|settings|members)(\/|$)/;
+
+// ログインAPI
+app.post('/api/login', (req, res) => {
+  const pw = (req.body && req.body.password) || '';
+  let role = null;
+  if (pw === ADMIN_PASSWORD)      role = 'admin';
+  else if (pw === STAFF_PASSWORD) role = 'staff';
+  if (!role) return res.status(401).json({ error: 'wrong password' });
+  const token = makeToken(role);
+  const attrs = [`app_auth=${token}`, `Max-Age=${COOKIE_MAX_AGE}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
+  if (process.env.NODE_ENV === 'production') attrs.push('Secure');
+  res.setHeader('Set-Cookie', attrs.join('; '));
+  res.json({ ok: true, role });
+});
+
+// 認証チェック middleware
+app.use((req, res, next) => {
+  // 認証不要なエンドポイント
+  if (req.path === '/login.html' || req.path === '/api/login' || req.path === '/api/ping') return next();
+  // JS/CSS/画像/font 等の静的アセットは公開 (HTMLは認証)
+  if (/\.(js|css|png|jpe?g|webp|svg|ico|json|woff2?|map)$/i.test(req.path)) return next();
+
+  const cookies = parseCookies(req.headers.cookie || '');
+  const role = verifyToken(cookies.app_auth);
+
+  // ブラウザのHTMLナビゲーションかAPI/fetchかを区別 (API は 302 redirect されない)
+  const isApi = req.path.startsWith('/api/');
+  const isHtmlNav = !isApi && (req.headers.accept || '').includes('text/html');
+
+  if (!role) {
+    if (isHtmlNav) {
+      return res.redirect('/login.html?next=' + encodeURIComponent(req.originalUrl));
+    }
+    return res.status(401).json({ error: 'auth required' });
+  }
+  const needAdmin = ADMIN_HTML.has(req.path) || ADMIN_API_RE.test(req.path);
+  if (needAdmin && role !== 'admin') {
+    if (isHtmlNav) {
+      return res.status(403).send(`<!doctype html><meta charset="utf-8">
+<style>body{font-family:'Noto Sans JP',sans-serif;text-align:center;padding:60px 20px;color:#1e293b;}
+h1{color:#dc2626;}a{display:inline-block;margin-top:18px;background:#6366f1;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;}</style>
+<h1>管理者専用ページ</h1>
+<p>このページは管理者パスワードでログインした方のみアクセスできます。</p>
+<a href="/login.html?next=${encodeURIComponent(req.originalUrl)}">ログイン画面へ</a>`);
+    }
+    return res.status(403).json({ error: 'admin only' });
+  }
+  req.userRole = role;
+  next();
+});
+// ===================================
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- SSE endpoint ---
