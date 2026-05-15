@@ -28,6 +28,13 @@ def canon_name(s):
         return s
     s = re.sub(r'\s+', ' ', str(s).replace('　', ' ').strip())
     return NAME_FIX.get(s, s)
+
+# ── タグから除外したい個人 ──
+# 例: 井浦正之さんは Excel 上「三役と井浦さん」のセクションに居るが、
+#     ユーザー指示で大タグなし (一般会員扱い) として登録する。
+NAME_FORCE_NO_TAG = {
+    ('井浦 正之', '福岡南RC'),
+}
 OUT_CSV = sys.argv[2] if len(sys.argv) > 2 else 'data/members_real.csv'
 MAP_REPORT = 'data/club_mapping.tsv'
 UNMATCHED_REPORT = 'data/unmatched.tsv'
@@ -284,6 +291,11 @@ def main():
         committee, room = committee_map.get(key, ('', ''))
         row['committee'] = committee
         row['committee_room'] = room
+
+    # NAME_FORCE_NO_TAG に該当する人は tag をクリア
+    for row in rows:
+        if (row['name'], row['club']) in NAME_FORCE_NO_TAG:
+            row['tag'] = ''
 
     # 参加対象一覧にないが協議会別参加者シートに居る人を補完追加
     existing_keys = set((r['name'], r['club']) for r in rows)
