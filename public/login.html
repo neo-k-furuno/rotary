@@ -152,7 +152,7 @@ const btn = document.getElementById('btn-submit');
 
 function getNext() {
   const next = new URLSearchParams(location.search).get('next');
-  if (!next || !next.startsWith('/')) return '/';
+  if (!next || !next.startsWith('/')) return null;
   return next;
 }
 
@@ -168,7 +168,10 @@ form.addEventListener('submit', async (e) => {
       body: JSON.stringify({ password: pw }),
     });
     if (res.ok) {
-      location.href = getNext();
+      const data = await res.json();
+      // next=指定があればそこへ。無ければ役職別のデフォルト先
+      const dest = getNext() || (data.role === 'admin' ? '/dashboard.html' : '/');
+      location.href = dest;
       return;
     }
     errorEl.textContent = 'パスワードが違います';
