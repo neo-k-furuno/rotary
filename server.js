@@ -67,6 +67,15 @@ db.exec(`
     value TEXT NOT NULL,
     updated_at TEXT
   );
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    total_members INTEGER NOT NULL DEFAULT 0,
+    total_attended INTEGER NOT NULL DEFAULT 0,
+    snapshot_json TEXT
+  );
 `);
 
 // 控え室設定の初期値 (なければ作成)
@@ -128,6 +137,7 @@ app.use(express.json());
 // 環境変数で上書き可能。本番は Fly.io secrets で設定推奨。
 const STAFF_PASSWORD = process.env.STAFF_PASSWORD || 'tojima';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'tjm';
+const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'owner';
 const APP_SECRET    = process.env.APP_SECRET    || 'dev-secret-change-me';
 const COOKIE_MAX_AGE = 24 * 60 * 60; // 1日
 
@@ -139,7 +149,7 @@ function verifyToken(token) {
   if (i <= 0) return null;
   const role = token.slice(0, i);
   const sig  = token.slice(i + 1);
-  if (role !== 'staff' && role !== 'admin') return null;
+  if (role !== 'staff' && role !== 'admin' && role !== 'owner') return null;
   if (hmac(role) !== sig) return null;
   return role;
 }
@@ -154,21 +164,25 @@ function parseCookies(header) {
   return out;
 }
 
-// 各ページに必要なロール (staff専用 / admin専用 / 共通)
+// 各ページに必要なロール (staff専用 / admin専用 / owner専用 / 共通)
 const PATH_ROLE = {
   '/':               'staff',
   '/index.html':     'staff',
   '/admin.html':     'admin',
   '/dashboard.html': 'admin',
+  '/owner.html':     'owner',
 };
 // 管理者専用 API (書き込み・設定系)
 const ADMIN_API_RE = /^\/api\/(import|export|reset|settings|members)(\/|$)/;
+// オーナー専用 API
+const OWNER_API_RE = /^\/api\/owner(\/|$)/;
 
 // ログインAPI
 app.post('/api/login', (req, res) => {
   const pw = (req.body && req.body.password) || '';
   let role = null;
-  if (pw === ADMIN_PASSWORD)      role = 'admin';
+  if (pw === OWNER_PASSWORD)      role = 'owner';
+  else if (pw === ADMIN_PASSWORD) role = 'admin';
   else if (pw === STAFF_PASSWORD) role = 'staff';
   if (!role) return res.status(401).json({ error: 'wrong password' });
   const token = makeToken(role);
@@ -211,6 +225,10 @@ app.use((req, res, next) => {
   // admin専用 API
   if (ADMIN_API_RE.test(req.path) && role !== 'admin') {
     return res.status(403).json({ error: 'admin only' });
+  }
+  // owner専用 API
+  if (OWNER_API_RE.test(req.path) && role !== 'owner') {
+    return res.status(403).json({ error: 'owner only' });
   }
   req.userRole = role;
   next();
@@ -606,6 +624,109 @@ app.post('/api/reset', (req, res) => {
   db.prepare('UPDATE members SET attended = 0, attended_at = NULL').run();
   broadcast({ type: 'attendance_update' });
   res.json({ ok: true });
+});
+
+// --- API: Owner (受付開始/終了/セッション履歴) ---
+// 受付開始: 出席状態を全リセットし、新しいセッション行を作成
+app.post('/api/owner/start', (req, res) => {
+  const note = (req.body && req.body.note) || '';
+  const startedAt = nowLocal();
+  const tx = db.transaction(() => {
+    // 出欠リセット
+    db.prepare('UPDATE members SET attended = 0, attended_at = NULL').run();
+    // 進行中のセッションを終了させる (異常終了扱い)
+    const ongoing = db.prepare('SELECT id FROM sessions WHERE ended_at IS NULL').all();
+    if (ongoing.length > 0) {
+      db.prepare("UPDATE sessions SET ended_at = ?, note = note || ' (異常終了)' WHERE ended_at IS NULL")
+        .run(startedAt);
+    }
+    // 新規セッション作成
+    const totalMembers = db.prepare('SELECT COUNT(*) as c FROM members').get().c;
+    const info = db.prepare(
+      'INSERT INTO sessions (started_at, note, total_members, total_attended) VALUES (?, ?, ?, 0)'
+    ).run(startedAt, note, totalMembers);
+    return info.lastInsertRowid;
+  });
+  const sessionId = tx();
+  broadcast({ type: 'attendance_update' });
+  broadcast({ type: 'session_start' });
+  res.json({ ok: true, session_id: sessionId, started_at: startedAt });
+});
+
+// 受付終了: 現在の出席状態をスナップショットとしてセッションに保存
+app.post('/api/owner/end', (req, res) => {
+  const session = db.prepare(
+    'SELECT id, started_at FROM sessions WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1'
+  ).get();
+  if (!session) return res.status(400).json({ error: 'no ongoing session' });
+
+  const endedAt = nowLocal();
+  // 現在の出席者を取得
+  const attended = db.prepare(`
+    SELECT m.id, m.name, m.name_kana, m.role, m.tag, m.attended_at,
+      c.name as club_name, g.name as group_name,
+      COALESCE(co.name, '') as committee_name,
+      COALESCE(co.room, '') as committee_room
+    FROM members m
+    JOIN clubs c ON m.club_id = c.id
+    JOIN groups_tbl g ON c.group_id = g.id
+    LEFT JOIN committees co ON m.committee_id = co.id
+    WHERE m.attended = 1
+    ORDER BY m.attended_at
+  `).all();
+  const totalMembers = db.prepare('SELECT COUNT(*) as c FROM members').get().c;
+  const snapshot = {
+    started_at: session.started_at,
+    ended_at: endedAt,
+    total_members: totalMembers,
+    total_attended: attended.length,
+    attended_members: attended,
+  };
+  db.prepare(
+    'UPDATE sessions SET ended_at = ?, total_members = ?, total_attended = ?, snapshot_json = ? WHERE id = ?'
+  ).run(endedAt, totalMembers, attended.length, JSON.stringify(snapshot), session.id);
+  broadcast({ type: 'session_end' });
+  res.json({ ok: true, session_id: session.id, ended_at: endedAt, total_attended: attended.length });
+});
+
+// セッション一覧 (snapshot は含めない、軽量化)
+app.get('/api/owner/sessions', (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, started_at, ended_at, note, total_members, total_attended FROM sessions ORDER BY id DESC LIMIT 50'
+  ).all();
+  res.json(rows);
+});
+
+// セッション詳細 (snapshot含む)
+app.get('/api/owner/sessions/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  try {
+    row.snapshot = row.snapshot_json ? JSON.parse(row.snapshot_json) : null;
+  } catch (e) { row.snapshot = null; }
+  delete row.snapshot_json;
+  res.json(row);
+});
+
+// セッションの出席者リストを CSV ダウンロード
+app.get('/api/owner/sessions/:id/csv', (req, res) => {
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.id);
+  if (!row || !row.snapshot_json) return res.status(404).json({ error: 'not found' });
+  const snap = JSON.parse(row.snapshot_json);
+  const BOM = '﻿';
+  let csv = BOM + '出席時刻,名前,フリガナ,グループ,クラブ,役職,大タグ,協議会,部屋\n';
+  for (const m of snap.attended_members) {
+    csv += [
+      m.attended_at || '',
+      csvQuote(m.name), csvQuote(m.name_kana),
+      csvQuote(m.group_name), csvQuote(m.club_name),
+      csvQuote(m.role), csvQuote(m.tag),
+      csvQuote(m.committee_name), csvQuote(m.committee_room),
+    ].join(',') + '\n';
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename=session_${row.id}.csv`);
+  res.send(csv);
 });
 
 // --- Seed dummy data ---

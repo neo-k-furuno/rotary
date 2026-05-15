@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>オーナーコンソール - ロータリー出欠管理</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;900&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Noto Sans JP', -apple-system, sans-serif;
+  background: linear-gradient(135deg, #1e293b 0%, #312e81 100%);
+  color: #1e293b;
+  min-height: 100vh;
+  padding: 24px;
+}
+.container { max-width: 900px; margin: 0 auto; }
+
+h1 {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #fef3c7;
+  margin-bottom: 4px;
+  text-align: center;
+}
+.subtitle {
+  text-align: center;
+  font-size: 12px;
+  color: #cbd5e1;
+  letter-spacing: 1px;
+  margin-bottom: 28px;
+}
+
+.card {
+  background: white;
+  border-radius: 18px;
+  padding: 26px 28px;
+  margin-bottom: 18px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+}
+.card h2 {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #4338ca;
+  margin-bottom: 14px;
+}
+
+/* 現在のステータス */
+.status-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.stat-box {
+  background: #fafbff;
+  border: 1px solid #e2e8f0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  text-align: center;
+}
+.stat-num {
+  font-size: 28px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: 11px;
+  color: #94a3b8;
+  letter-spacing: 1px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.session-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.session-banner.idle {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+/* 大きなアクションボタン */
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.big-btn {
+  position: relative;
+  padding: 28px 20px;
+  border: none;
+  border-radius: 16px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  cursor: pointer;
+  color: white;
+  transition: transform 0.12s, box-shadow 0.12s;
+  text-align: center;
+  line-height: 1.5;
+}
+.big-btn:active { transform: scale(0.97); }
+.big-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.big-btn.start {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  box-shadow: 0 4px 18px rgba(22, 163, 74, 0.30);
+}
+.big-btn.start:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(22, 163, 74, 0.45); }
+.big-btn.end {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.30);
+}
+.big-btn.end:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(220, 38, 38, 0.45); }
+.big-btn small {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-top: 6px;
+  opacity: 0.85;
+}
+
+/* セッション一覧 */
+.session-list {
+  margin-top: 10px;
+}
+.session-row {
+  display: grid;
+  grid-template-columns: 1fr 110px 110px 90px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: #fafbff;
+  font-size: 13px;
+}
+.session-row.ongoing {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+.session-row .s-id {
+  font-weight: 700;
+  color: #6366f1;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.session-row .s-time {
+  color: #64748b;
+  font-size: 11px;
+}
+.session-row .s-count {
+  text-align: right;
+  font-weight: 700;
+  color: #1e293b;
+}
+.session-row .s-count small { color: #94a3b8; font-weight: 500; font-size: 11px; }
+.session-row a.btn-csv {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+}
+.session-row a.btn-csv:hover { background: #dcfce7; }
+.session-row .btn-csv.disabled {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.nav-links {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 22px;
+}
+.nav-links a {
+  color: #cbd5e1;
+  font-size: 12px;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+}
+.nav-links a:hover { background: rgba(255,255,255,0.10); color: #fff; }
+
+/* トースト */
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #16a34a;
+  color: white;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.3s;
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.30);
+}
+.toast.show { opacity: 1; }
+.toast.error { background: #dc2626; box-shadow: 0 4px 16px rgba(220, 38, 38, 0.30); }
+
+/* モーダル */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+.modal-box {
+  background: white;
+  border-radius: 18px;
+  padding: 30px 32px;
+  max-width: 480px;
+  width: 92%;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.30);
+}
+.modal-box h3 { font-size: 16px; font-weight: 900; color: #4338ca; margin-bottom: 8px; letter-spacing: 1px; }
+.modal-box p { font-size: 13px; color: #475569; line-height: 1.7; margin-bottom: 16px; }
+.modal-box .warn {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.modal-box .actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-box button {
+  padding: 10px 22px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-cancel { background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; }
+.btn-confirm-start { background: linear-gradient(135deg, #16a34a, #15803d); color: white; }
+.btn-confirm-end   { background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; }
+
+@media (max-width: 600px) {
+  .actions-grid { grid-template-columns: 1fr; }
+  .status-bar { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat-num { font-size: 22px; }
+  .stat-label { font-size: 10px; }
+  .session-row { grid-template-columns: 1fr 1fr; row-gap: 6px; }
+  .session-row .s-count { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>OWNER CONSOLE</h1>
+  <p class="subtitle">受付セッションの開始 / 終了 / 履歴</p>
+
+  <!-- 現在の状態 -->
+  <div class="card">
+    <h2>現在の状態</h2>
+    <div class="status-bar">
+      <div class="stat-box"><div class="stat-num" id="stat-total">--</div><div class="stat-label">登録総数</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-attended">--</div><div class="stat-label">出席</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-rate">--</div><div class="stat-label">出席率</div></div>
+    </div>
+    <div class="session-banner idle" id="session-banner">セッション情報を読み込み中...</div>
+  </div>
+
+  <!-- アクション -->
+  <div class="card">
+    <h2>受付セッション操作</h2>
+    <div class="actions-grid">
+      <button class="big-btn start" id="btn-start">
+        📋 受付を開始する
+        <small>※ 全員の出欠を一度リセットします</small>
+      </button>
+      <button class="big-btn end" id="btn-end" disabled>
+        🛑 受付を終了する
+        <small>※ 現在の出席状態を保存します</small>
+      </button>
+    </div>
+  </div>
+
+  <!-- セッション履歴 -->
+  <div class="card">
+    <h2>セッション履歴</h2>
+    <div class="session-list" id="session-list"></div>
+  </div>
+
+  <div class="nav-links">
+    <a href="/dashboard.html">ダッシュボード</a>
+    <a href="/admin.html">管理画面</a>
+    <a href="/">iPad受付</a>
+  </div>
+</div>
+
+<!-- 確認モーダル -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <h3 id="modal-title"></h3>
+    <p id="modal-body"></p>
+    <div class="warn" id="modal-warn" style="display:none;"></div>
+    <div class="actions">
+      <button class="btn-cancel" id="btn-cancel-modal">キャンセル</button>
+      <button id="btn-confirm-modal">実行する</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let cachedData = null;
+let currentSessionId = null;
+
+async function refresh() {
+  const [dash, sessions] = await Promise.all([
+    fetch('/api/dashboard', { cache: 'no-store' }).then(r => r.json()),
+    fetch('/api/owner/sessions', { cache: 'no-store' }).then(r => r.json()),
+  ]);
+  cachedData = dash;
+  renderStatus(dash);
+  renderSessions(sessions);
+}
+
+function renderStatus(d) {
+  document.getElementById('stat-total').textContent = d.totalMembers;
+  document.getElementById('stat-attended').textContent = d.totalAttended;
+  const rate = d.totalMembers > 0 ? Math.round(d.totalAttended / d.totalMembers * 100) : 0;
+  document.getElementById('stat-rate').textContent = rate + '%';
+}
+
+function fmtTime(s) {
+  if (!s) return '';
+  return s.replace(/(\d{4})-(\d{2})-(\d{2}) /, '$2/$3 ');
+}
+
+function renderSessions(sessions) {
+  const ongoing = sessions.find(s => !s.ended_at);
+  const banner = document.getElementById('session-banner');
+  const btnStart = document.getElementById('btn-start');
+  const btnEnd = document.getElementById('btn-end');
+  if (ongoing) {
+    currentSessionId = ongoing.id;
+    banner.className = 'session-banner';
+    banner.textContent = `🟢 セッション #${ongoing.id} 進行中 (開始: ${fmtTime(ongoing.started_at)})`;
+    btnStart.disabled = true;
+    btnEnd.disabled = false;
+  } else {
+    currentSessionId = null;
+    banner.className = 'session-banner idle';
+    banner.textContent = '⚪ 進行中のセッションなし';
+    btnStart.disabled = false;
+    btnEnd.disabled = true;
+  }
+
+  document.getElementById('session-list').innerHTML = sessions.length === 0
+    ? '<div style="padding:16px;color:#94a3b8;font-size:13px;text-align:center;">セッション履歴なし</div>'
+    : sessions.map(s => {
+      const ongoingCls = s.ended_at ? '' : ' ongoing';
+      const csvLink = s.ended_at
+        ? `<a class="btn-csv" href="/api/owner/sessions/${s.id}/csv">CSV</a>`
+        : `<span class="btn-csv disabled">進行中</span>`;
+      return `<div class="session-row${ongoingCls}">
+        <div>
+          <div class="s-id">#${s.id}${s.ended_at ? '' : ' (進行中)'}</div>
+          <div class="s-time">${fmtTime(s.started_at)}${s.ended_at ? ` 〜 ${fmtTime(s.ended_at)}` : ''}</div>
+        </div>
+        <div class="s-count">${s.total_attended} <small>/ ${s.total_members}</small></div>
+        <div class="s-count">${s.total_members > 0 ? Math.round(s.total_attended/s.total_members*100) : 0}<small>%</small></div>
+        ${csvLink}
+      </div>`;
+    }).join('');
+}
+
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('error', !!isError);
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function openConfirm({ title, body, warn, btnLabel, btnClass, onConfirm }) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent = body;
+  const warnEl = document.getElementById('modal-warn');
+  if (warn) { warnEl.textContent = warn; warnEl.style.display = 'block'; }
+  else warnEl.style.display = 'none';
+  const btn = document.getElementById('btn-confirm-modal');
+  btn.textContent = btnLabel;
+  btn.className = btnClass;
+  document.getElementById('confirm-modal').classList.add('active');
+  btn.onclick = async () => {
+    document.getElementById('confirm-modal').classList.remove('active');
+    try { await onConfirm(); } catch (e) { showToast('エラー: ' + e.message, true); }
+  };
+}
+
+document.getElementById('btn-cancel-modal').onclick = () => {
+  document.getElementById('confirm-modal').classList.remove('active');
+};
+
+document.getElementById('btn-start').onclick = () => openConfirm({
+  title: '受付を開始しますか？',
+  body: '全員の出欠状態が一度リセットされ、新しいセッションが始まります。',
+  warn: '⚠ 進行中の出席データはここで「異常終了」として保存されます。',
+  btnLabel: '受付開始',
+  btnClass: 'btn-confirm-start',
+  onConfirm: async () => {
+    const res = await fetch('/api/owner/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    if (!res.ok) throw new Error('http ' + res.status);
+    showToast('受付セッションを開始しました');
+    await refresh();
+  },
+});
+
+document.getElementById('btn-end').onclick = () => openConfirm({
+  title: '受付を終了しますか？',
+  body: '現在の出席状態がスナップショットとして保存されます。後でCSVダウンロードできます。',
+  btnLabel: '受付終了',
+  btnClass: 'btn-confirm-end',
+  onConfirm: async () => {
+    const res = await fetch('/api/owner/end', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    showToast(`受付を終了しました (${data.total_attended}名分を保存)`);
+    await refresh();
+  },
+});
+
+// SSE で他端末からの登録もリアルタイム反映
+const es = new EventSource('/api/events');
+es.onmessage = () => refresh();
+es.onerror = () => {}; // sync.js のような厳密な再接続は要らない
+
+refresh();
+setInterval(refresh, 10000); // 念のため10秒に1回ポーリング
+</script>
+</body>
+</html>
