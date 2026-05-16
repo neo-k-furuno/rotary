@@ -764,7 +764,6 @@ summary:hover { background: #f8fafc; border-color: #c7d2fe; }
   <div class="spacer"></div>
   <button onclick="showImportModal()">CSV インポート</button>
   <a href="/api/export" class="btn-export">CSV エクスポート</a>
-  <button class="btn-reset" onclick="resetAll()">出欠リセット</button>
 </div>
 
 <div class="group-tabs" id="group-tabs"></div>
@@ -1237,14 +1236,6 @@ async function doImport() {
   } else {
     alert('エラー: ' + data.error);
   }
-}
-
-async function resetAll() {
-  if (!confirm('全員の出欠をリセットしますか？\nこの操作は取り消せません。')) return;
-  await fetch('/api/reset', { method: 'POST' });
-  isFirstRender = true;
-  prevAttendedIds = new Set();
-  loadDashboard();
 }
 
 // ── 接続ステータス ──
